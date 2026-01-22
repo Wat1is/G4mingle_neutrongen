@@ -1,12 +1,17 @@
 #include <G4VUserDetectorConstruction.hh>
 #include <G4tgbVolumeMgr.hh>
+#include <G4Step.hh>
+#include <G4Track.hh>
+#include <G4Neutron.hh>
+
+
 
 
 class Detector : public G4VUserDetectorConstruction
 {
 	public:
 		G4VPhysicalVolume* Construct() {
-			G4tgbVolumeMgr::GetInstance()->AddTextFile("polydetector.tg");
+			G4tgbVolumeMgr::GetInstance()->AddTextFile("detector.tg");
 			return G4tgbVolumeMgr::GetInstance()->ReadAndConstructDetector();
 		} ///< load detector definition from a text file "detector.tg"
 };
@@ -27,14 +32,51 @@ class Generator : public G4VUserPrimaryGeneratorAction
 };
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
+#include <G4UserSteppingAction.hh>
+
+class KillboxSteppingAction : public G4UserSteppingAction
+{
+public:
+    void UserSteppingAction(const G4Step* step) override
+    {
+        auto* track = step->GetTrack();
+
+        const auto* prePV = step->GetPreStepPoint() ? step->GetPreStepPoint()->GetPhysicalVolume() : nullptr;
+        const auto* postPV = step->GetPostStepPoint() ? step->GetPostStepPoint()->GetPhysicalVolume() : nullptr;
+
+        // Only do anything if we actually entered a different volume
+        if (!postPV || postPV == prePV)
+            return;
+
+        bool enteredKillbox = false;
+
+
+        // Material naming rule: "Killbox"
+        if (!enteredKillbox)
+        {
+            const auto* postMat = step->GetPostStepPoint()->GetMaterial();
+            if (postMat && postMat->GetName() == "Killbox")
+                enteredKillbox = true;
+        }
+
+        if (enteredKillbox)
+        {
+            track->SetTrackStatus(fStopAndKill);
+            return;
+        }
+    }
+};
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
 #include <G4VUserActionInitialization.hh>
 
 class Action : public G4VUserActionInitialization
 {
-	public:
-        void Build() const {
-            SetUserAction(new Generator);
-        }
+public:
+	void Build() const {
+		SetUserAction(new Generator);
+        SetUserAction(new KillboxSteppingAction);
+	}
 };
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
@@ -74,4 +116,5 @@ int main(int argc,char** argv)
 	}
 
 	delete vis; delete run;
+	return 0;
 }
