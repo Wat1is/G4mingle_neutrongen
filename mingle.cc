@@ -69,19 +69,42 @@ public:
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 #include <G4VUserActionInitialization.hh>
+#include <G4PhysListFactory.hh>
+#include <G4PhysListFactoryMessenger.hh>
+#include <G4UIcmdWithAString.hh>
+#include <G4RunManagerFactory.hh>
 
-class Action : public G4VUserActionInitialization
+class Action : public G4VUserActionInitialization, public G4UImessenger
 {
+private:
+    G4UIcmdWithAString* fCmdPhys; ///< macro cmd to select a physics list
 public:
-	void Build() const {
-		SetUserAction(new Generator);
+    Action() : G4VUserActionInitialization(), G4UImessenger() {
+        fCmdPhys = new G4UIcmdWithAString("/physics_lists/select", this);
+        fCmdPhys->SetGuidance("Select a physics list");
+        fCmdPhys->SetGuidance("Candidates are specified in G4PhysListFactory.cc");
+        fCmdPhys->SetParameterName("name of a physics list", false);
+        fCmdPhys->AvailableForStates(G4State_PreInit);
+    }
+    ~Action() { delete fCmdPhys; }
+    void Build() const {
+        SetUserAction(new Generator);
         SetUserAction(new KillboxSteppingAction);
-	}
+    }
+    void SetNewValue(G4UIcommand* cmd, G4String value) {
+        if (cmd != fCmdPhys) return;
+        auto run = G4RunManager::GetRunManager();
+        //delete run->GetUserPhysicsList(); // FIXME: memory leak without delete
+        G4PhysListFactory factory;
+        G4VModularPhysicsList* physicsList1 = factory.GetReferencePhysList(value);
+        //auto* opticalphys = new G4OpticalPhysics();
+        //physicsList1->RegisterPhysics(opticalphys);
+        run->SetUserInitialization(physicsList1);
+    } ///< for UI
 };
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 #include <G4RunManagerFactory.hh>
-#include <G4PhysListFactory.hh>
 #include <G4AnalysisManager.hh>
 #include <G4ScoringManager.hh>
 #include <G4VisExecutive.hh>
