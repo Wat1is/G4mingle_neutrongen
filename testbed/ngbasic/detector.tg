@@ -1,0 +1,36 @@
+:MIXT PolystyreneApprox 1.06*g/cm3 2
+ G4_C 0.9226
+ G4_H 0.0774  
+
+:ISOT B10 5 10 5 
+:ISOT B11 5 11 6
+
+:ELEM_FROM_ISOT boronNS BNS 2 
+ B10 0.199 
+ B11 0.801
+
+:MIXT NS 1.05675*g/cm3 4
+ G4_H 0.11597
+ boronNS 0.04985
+ G4_C 0.61283
+ G4_O 0.22135
+
+:mate Killbox 1 1 0.01
+
+:VOLU world BOX 3*m 3*m 3*m G4_AIR
+:VOLU Scintillator BOX 2.5*cm 20*cm 20*cm PolystyreneApprox
+:VOLU Cover BOX 0.1*cm 20*cm 20*cm G4_AIR
+:VOLU NS BOX 4*cm 10*cm 20*cm NS
+:VOLU Dcube BOX 2.5*cm 1*cm 1*cm G4_STAINLESS-STEEL
+
+
+
+
+:rotm r000 0 0 0 
+
+:PLACE Scintillator 1 world r000 50*cm 0 0 
+
+:PLACE Cover 2 world r000 47.4*cm 0 0
+
+
+:vis world OFF

@@ -6,18 +6,53 @@
 #include <G4Proton.hh>
 #include <G4Deuteron.hh>
 #include <G4Triton.hh>
+#include <atomic>
+#include "GB01BOptrMultiParticleChangeCrossSection.hh"
+#include <G4LogicalVolumeStore.hh>
 
-
-
+namespace {
+    std::atomic<bool> gEnableDTXSBoost{ false };
+}
 
 class Detector : public G4VUserDetectorConstruction
 {
 	public:
-		G4VPhysicalVolume* Construct() {
+		G4VPhysicalVolume* Construct() override {
 			G4tgbVolumeMgr::GetInstance()->AddTextFile("detector.tg");
 			return G4tgbVolumeMgr::GetInstance()->ReadAndConstructDetector();
 		} ///< load detector definition from a text file "detector.tg"
+        void ConstructSDandField() override
+        {
+            // One operator per thread (MT-safe)
+            static thread_local bool attached = false;
+            static thread_local GB01BOptrMultiParticleChangeCrossSection* op = nullptr;
+
+            if (attached) return;
+            if (!gEnableDTXSBoost.load(std::memory_order_relaxed)) return;
+
+            op = new GB01BOptrMultiParticleChangeCrossSection();
+            op->AddParticle("deuteron");
+            op->AddParticle("triton");
+
+            // Attach to ALL logical volumes => “everywhere”
+            for (auto* lv : *G4LogicalVolumeStore::GetInstance())
+            {
+                if (lv) op->AttachTo(lv);
+            }
+
+            attached = true;
+        }
 };
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+#include <G4LogicalVolumeStore.hh>
+#include <G4GenericBiasingPhysics.hh>
+#include <G4VModularPhysicsList.hh>
+
+#include <G4UIdirectory.hh>
+
+
+
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 #include <G4VUserPrimaryGeneratorAction.hh>
@@ -39,6 +74,17 @@ class Generator : public G4VUserPrimaryGeneratorAction
 
 namespace {
     std::atomic<bool> gKeepOnlyDTpnEnabled{ false };
+
+
+
+    inline void RegisterDTBiasingPhysics(G4VModularPhysicsList* pl)
+    {
+        // Required so GB01 operators can see wrapped biasing processes for these particles.
+        auto* biasPhys = new G4GenericBiasingPhysics();
+        biasPhys->Bias("deuteron");
+        biasPhys->Bias("triton");
+        pl->RegisterPhysics(biasPhys);
+    }
 }
 
 
@@ -104,6 +150,8 @@ class Action : public G4VUserActionInitialization, public G4UImessenger
 private:
     G4UIcmdWithAString* fCmdPhys; ///< macro cmd to select a physics list
     G4UIcmdWithABool* fCmdKeepOnly; ///< enable n/p/d/t filter
+    G4UIdirectory* fDirBias = nullptr; ///< enable isotropic biasing (WIP)
+    G4UIcmdWithABool* fCmdDTXSBoost = nullptr; ///< enable dt biasing
 public:
     Action() : G4VUserActionInitialization(), G4UImessenger() {
         fCmdPhys = new G4UIcmdWithAString("/physics_lists/select", this);
@@ -113,8 +161,16 @@ public:
         fCmdPhys->AvailableForStates(G4State_PreInit);
         fCmdKeepOnly = new G4UIcmdWithABool("/particle/KeepOnlyNG", this);
         fCmdKeepOnly->SetGuidance("true: kill everything except neutron/proton/deuteron/triton. false: disable.");
+        fCmdDTXSBoost = new G4UIcmdWithABool("/particle/enableDTXSBoost", this);
+        fCmdDTXSBoost->SetGuidance("Enable GB01 D/T cross-section boost everywhere. Must be set before /run/initialize.");
+        fCmdDTXSBoost->AvailableForStates(G4State_PreInit);
     }
-    ~Action() { delete fCmdPhys; delete fCmdKeepOnly;}
+    ~Action() {
+        delete fCmdDTXSBoost;
+        delete fDirBias;
+        delete fCmdPhys;
+        delete fCmdKeepOnly;
+    }
     void Build() const {
         SetUserAction(new Generator);
         SetUserAction(new KillboxSteppingAction);
@@ -124,10 +180,15 @@ public:
             gKeepOnlyDTpnEnabled.store(fCmdKeepOnly->GetNewBoolValue(value), std::memory_order_relaxed);
             return;
         }
+        if (cmd == fCmdDTXSBoost) {
+            gEnableDTXSBoost.store(fCmdDTXSBoost->GetNewBoolValue(value), std::memory_order_relaxed);
+            return;
+        }
         if (cmd != fCmdPhys) return;
         auto run = G4RunManager::GetRunManager();
         G4PhysListFactory factory;
         G4VModularPhysicsList* physicsList1 = factory.GetReferencePhysList(value);
+        RegisterDTBiasingPhysics(physicsList1);
         run->SetUserInitialization(physicsList1);
     } ///< for UI
 };
@@ -148,8 +209,12 @@ int main(int argc,char** argv)
 	G4ScoringManager::GetScoringManager(); // enable macro commands in /score/
 
 
-	G4PhysListFactory factory;
-	run->SetUserInitialization(factory.ReferencePhysList());
+    G4PhysListFactory factory;
+    auto* pl0 = factory.ReferencePhysList();
+    if (auto* modular = dynamic_cast<G4VModularPhysicsList*>(pl0)) {
+        RegisterDTBiasingPhysics(modular);
+    }
+    run->SetUserInitialization(pl0);
 
 	run->SetUserInitialization(new Detector);
 
