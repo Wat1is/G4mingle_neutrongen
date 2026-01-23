@@ -45,11 +45,9 @@ class Detector : public G4VUserDetectorConstruction
 };
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-#include <G4LogicalVolumeStore.hh>
-#include <G4GenericBiasingPhysics.hh>
-#include <G4VModularPhysicsList.hh>
 
-#include <G4UIdirectory.hh>
+
+
 
 
 
@@ -71,6 +69,9 @@ class Generator : public G4VUserPrimaryGeneratorAction
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
 #include <G4UserSteppingAction.hh>
+#include <G4LogicalVolumeStore.hh>
+#include <G4GenericBiasingPhysics.hh>
+#include <G4VModularPhysicsList.hh>
 
 namespace {
     std::atomic<bool> gKeepOnlyDTpnEnabled{ false };
