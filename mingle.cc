@@ -9,9 +9,12 @@
 #include <atomic>
 #include "GB01BOptrMultiParticleChangeCrossSection.hh"
 #include <G4LogicalVolumeStore.hh>
+#include <G4PhysicalVolumeStore.hh>
 
 namespace {
     std::atomic<bool> gEnableDTXSBoost{ false };
+
+    G4String gDTXSBoostPVName = "";
 }
 
 class Detector : public G4VUserDetectorConstruction
@@ -37,7 +40,29 @@ class Detector : public G4VUserDetectorConstruction
             // Attach to ALL logical volumes => “everywhere”
             for (auto* lv : *G4LogicalVolumeStore::GetInstance())
             {
-                if (lv) op->AttachTo(lv);
+                if (gDTXSBoostPVName.empty()) {
+                    // Global: attach to ALL logical volumes (true “everywhere”)
+                    for (auto* lv : *G4LogicalVolumeStore::GetInstance()) {
+                        if (lv) op->AttachTo(lv);
+                    }
+                }
+                else {
+                    // Targeted: attach to all logical volumes whose PHYSICAL placement name matches
+                    bool foundAny = false;
+
+                    for (auto* pv : *G4PhysicalVolumeStore::GetInstance()) {
+                        if (!pv) continue;
+                        if (pv->GetName() != gDTXSBoostPVName) continue;
+
+                        foundAny = true;
+                        op->AttachTo(pv->GetLogicalVolume());
+                    }
+
+                    if (!foundAny) {
+                        G4cout << "[Biasing] WARNING: no physical volume found with name '"
+                            << gDTXSBoostPVName << "'; no targeted biasing attached." << G4endl;
+                    }
+                }
             }
 
             attached = true;
@@ -153,6 +178,7 @@ private:
     G4UIcmdWithABool* fCmdKeepOnly; ///< enable n/p/d/t filter
     G4UIdirectory* fDirBias = nullptr; ///< enable isotropic biasing (WIP)
     G4UIcmdWithABool* fCmdDTXSBoost = nullptr; ///< enable dt biasing
+    G4UIcmdWithAString* fCmdDTXSBoostVolume = nullptr; //< dt biasing target volume (defaults to world if none given)
 public:
     Action() : G4VUserActionInitialization(), G4UImessenger() {
         fCmdPhys = new G4UIcmdWithAString("/physics_lists/select", this);
@@ -165,12 +191,17 @@ public:
         fCmdDTXSBoost = new G4UIcmdWithABool("/particle/enableDTXSBoost", this);
         fCmdDTXSBoost->SetGuidance("Enable GB01 D/T cross-section boost everywhere. Must be set before /run/initialize.");
         fCmdDTXSBoost->AvailableForStates(G4State_PreInit);
+        fCmdDTXSBoostVolume = new G4UIcmdWithAString("/particle/DTXSBoostVolume", this);
+        fCmdDTXSBoostVolume->SetGuidance("Set physical volume name to apply D/T XS boost only there. Empty = global.");
+        fCmdDTXSBoostVolume->SetParameterName("pvName", false);
+        fCmdDTXSBoostVolume->AvailableForStates(G4State_PreInit);
     }
     ~Action() {
         delete fCmdDTXSBoost;
         delete fDirBias;
         delete fCmdPhys;
         delete fCmdKeepOnly;
+        delete fCmdDTXSBoostVolume;
     }
     void Build() const {
         SetUserAction(new Generator);
@@ -183,6 +214,10 @@ public:
         }
         if (cmd == fCmdDTXSBoost) {
             gEnableDTXSBoost.store(fCmdDTXSBoost->GetNewBoolValue(value), std::memory_order_relaxed);
+            return;
+        }
+        if (cmd == fCmdDTXSBoostVolume) {
+            gDTXSBoostPVName = value;   // empty string => global
             return;
         }
         if (cmd != fCmdPhys) return;
