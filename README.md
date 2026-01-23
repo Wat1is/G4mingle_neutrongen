@@ -1,4 +1,4 @@
-A Geant4 application designed for large fast neutron scattering simulations.
+A Geant4 application designed for large fast neutron scattering simulations/DD-DT neutron generator simulations.
 
 Based on:
 [MinGLE]: https://github.com/MinGLE/MinGLE
