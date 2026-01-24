@@ -24,35 +24,62 @@
 // ********************************************************************
 //
 //
-/// \file SteppingAction.hh
-/// \brief Definition of the SteppingAction class
+/// \file field/field05/src/F05Field.cc
+/// \brief Implementation of the F05Field class
+//
 
-#ifndef SteppingAction_h
-#define SteppingAction_h 1
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-#include "G4UserSteppingAction.hh"
+#include "F05Field.hh"
 
-/// Stepping action class.
-///
-/// In UserSteppingAction() there are collected the energy deposit and track
-/// lengths of charged particles in Absober and Gap layers and
-/// updated in EventAction.
-/// 
-class DetectorConstruction;
-
-class SteppingAction : public G4UserSteppingAction
-{
-public:
-  SteppingAction(const DetectorConstruction* detConstruction);
- ~SteppingAction();
-
-  void UserSteppingAction(const G4Step* step) override;
-
-private:
-	const DetectorConstruction* fDetConstruction = nullptr;
-
-};
+#include "G4SystemOfUnits.hh"
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-#endif
+F05Field::F05Field() : G4ElectroMagneticField()
+{
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+F05Field::~F05Field()
+{
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void F05Field::GetFieldValue(const G4double Point[4], G4double* Bfield) const
+{
+	// Point[0],Point[1],Point[2] are x-, y-, z-cordinates, Point[3] is time
+
+	G4double Ex, Ey;
+	G4double R2, R1, U;
+	R2 = 96;
+	R1 = 20;
+	U = 80000000*volt/m;
+
+ 	G4double posR = std::sqrt(std::pow(Point[0],2) + std::pow(Point[1],2));
+ 	G4double cos_theta, sin_theta;
+	G4double Er = U / ((std::log(R2 / R1))*(G4double)posR);
+
+  if (posR>=10&&posR<=48){
+     cos_theta = Point[0]/(G4double)posR;
+     sin_theta = Point[1]/(G4double)posR;
+     Ex = -1*(Er*cos_theta);//apply radial electric field
+     Ey = -1*(Er*sin_theta);
+  }else{
+     Ex=0;
+     Ey=0;
+  }
+  
+  Bfield[0]=0;
+  Bfield[1]=0;
+  Bfield[2]=0;
+
+  Bfield[3]=Ex;
+  Bfield[4]=Ey;
+  Bfield[5]=0;
+
+  return;
+}
