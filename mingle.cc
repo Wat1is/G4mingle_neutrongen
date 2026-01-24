@@ -22,6 +22,7 @@
 #include <G4MagIntegratorDriver.hh>
 
 namespace {
+
     // ---- D/T XS boost (GB01) ----
     std::atomic<bool> gEnableDTXSBoost{ false };
     // Empty => global
@@ -33,51 +34,81 @@ namespace {
     G4String gEMFieldTargetPVName = "";
     // Min integration step for the field driver
     G4double gEMFieldMinStep = 0.01 * mm;
+
+    enum class EMFieldMode {
+        UniformOnly = 0,   // use uniform E only
+        RadialE = 1    // add radial E contribution (plus uniform E offset)
+    };
+    G4ThreeVector gFieldB = G4ThreeVector(0., 0., 0.) * tesla;
+    G4ThreeVector gFieldE = G4ThreeVector(0., 0., 0.) * (volt / m);
+    EMFieldMode gEMFieldMode = EMFieldMode::UniformOnly;
+    // Radial E parameters:
+    // Er = U / (ln(R2/R1) * r) within (r in [Rmin,Rmax]) and |z|<=Zmax, directed inward in xy-plane
+    G4double gRadialU = 8.0e7 * (volt / m);  // previously "80000000 * volt/m"
+    G4double gRadialR1 = 20.0 * mm;
+    G4double gRadialR2 = 96.0 * mm;
+    G4double gRadialRmin = 10.0 * mm;
+    G4double gRadialRmax = 48.0 * mm;
+    G4double gRadialZmax = 180.0 * mm;
+
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-class F05Field : public G4ElectroMagneticField
+class ParamEMField : public G4ElectroMagneticField
 {
 public:
-    F05Field() : G4ElectroMagneticField() {}
-    ~F05Field() override = default;
+    ParamEMField() : G4ElectroMagneticField() {}
+    ~ParamEMField() override = default;
 
     G4bool DoesFieldChangeEnergy() const override { return true; }
 
-    // field[6]: Bx,By,Bz,Ex,Ey,Ez
-    // Point[4]: x,y,z,t
-    void GetFieldValue(const G4double Point[4], G4double* Bfield) const override
+    // field[6] = {Bx,By,Bz,Ex,Ey,Ez}
+    void GetFieldValue(const G4double Point[4], G4double* field) const override
     {
-        // Radial electric field like in your ExamplesIn F05Field.cc
-        G4double Ex = 0.0, Ey = 0.0;
-        G4double R2 = 96.0;
-        G4double R1 = 20.0;
-        G4double U = 80000000 * volt / m; // same as example
+        // Uniform B
+        field[0] = gFieldB.x();
+        field[1] = gFieldB.y();
+        field[2] = gFieldB.z();
 
-        G4double posR = std::sqrt(Point[0] * Point[0] + Point[1] * Point[1]);
-        G4double posZ = std::sqrt(Point[2] * Point[2]);
+        // Start with uniform E
+        G4double Ex = gFieldE.x();
+        G4double Ey = gFieldE.y();
+        G4double Ez = gFieldE.z();
 
-        if (posR > 0.0) {
-            G4double Er = U / ((std::log(R2 / R1)) * posR);
+        if (gEMFieldMode == EMFieldMode::RadialE)
+        {
+            const G4double x = Point[0];
+            const G4double y = Point[1];
+            const G4double z = Point[2];
 
-            if (posR >= 10.0 && posR <= 48.0 && posZ <= 180.0) {
-                G4double cos_theta = Point[0] / posR;
-                G4double sin_theta = Point[1] / posR;
-                Ex = -Er * cos_theta;
-                Ey = -Er * sin_theta;
+            const G4double r = std::sqrt(x * x + y * y);
+            const G4double az = std::fabs(z);
+
+            // avoid r=0 and invalid log
+            if (r > 0.0 && gRadialR2 > gRadialR1 && gRadialR1 > 0.0)
+            {
+                if (r >= gRadialRmin && r <= gRadialRmax && az <= gRadialZmax)
+                {
+                    const G4double denom = std::log(gRadialR2 / gRadialR1) * r;
+                    if (denom != 0.0)
+                    {
+                        const G4double Er = gRadialU / denom;  // units: (V/m)/(1* m) -> V/m
+
+                        // inward radial direction in xy-plane
+                        const G4double cx = x / r;
+                        const G4double cy = y / r;
+
+                        Ex += -Er * cx;
+                        Ey += -Er * cy;
+                    }
+                }
             }
         }
 
-        // No magnetic field in this example
-        Bfield[0] = 0.0;
-        Bfield[1] = 0.0;
-        Bfield[2] = 0.0;
-
-        // Electric field
-        Bfield[3] = Ex;
-        Bfield[4] = Ey;
-        Bfield[5] = 0.0;
+        field[3] = Ex;
+        field[4] = Ey;
+        field[5] = Ez;
     }
 };
 
@@ -140,22 +171,19 @@ class Detector : public G4VUserDetectorConstruction
             {
                 static thread_local bool fieldAttached = false;
 
-                static thread_local F05Field* field = nullptr;
+                static thread_local ParamEMField* field = nullptr;
                 static thread_local G4EqMagElectricField* equation = nullptr;
                 static thread_local G4DormandPrince745* stepper = nullptr;
                 static thread_local G4MagInt_Driver* driver = nullptr;
                 static thread_local G4ChordFinder* chordFinder = nullptr;
 
-                // For targeted PV attachment
-                static thread_local G4FieldManager* localFieldMgr = nullptr;
+                // Local manager for targeted PV case
+                static thread_local G4FieldManager* localFM = nullptr;
 
                 if (!fieldAttached)
                 {
-                    field = new F05Field();
-
+                    field = new ParamEMField();
                     equation = new G4EqMagElectricField(field);
-
-                    // ExamplesIn uses DormandPrince745 with nvar=8
                     stepper = new G4DormandPrince745(equation, 8);
 
                     driver = new G4MagInt_Driver(gEMFieldMinStep, stepper, stepper->GetNumberOfVariables());
@@ -163,47 +191,52 @@ class Detector : public G4VUserDetectorConstruction
 
                     if (gEMFieldTargetPVName.empty())
                     {
-                        // Global field manager (same pattern as the ExamplesIn setup)
+                        // Global field manager (affects whole geometry)
                         auto* globalFM = G4TransportationManager::GetTransportationManager()->GetFieldManager();
                         globalFM->SetDetectorField(field);
                         globalFM->SetChordFinder(chordFinder);
 
-                        G4cout << "[Field] Enabled global EM field (F05Field). minStep="
-                            << gEMFieldMinStep / mm << " mm" << G4endl;
+                        G4cout << "[Field] Global EM field enabled. "
+                            << "B(T)=(" << gFieldB.x() / tesla << "," << gFieldB.y() / tesla << "," << gFieldB.z() / tesla << ") "
+                            << "E(V/m)=(" << gFieldE.x() / (volt / m) << "," << gFieldE.y() / (volt / m) << "," << gFieldE.z() / (volt / m) << ") "
+                            << "minStep=" << gEMFieldMinStep / mm << " mm"
+                            << G4endl;
                     }
                     else
                     {
-                        // Targeted: attach to ALL physical volumes matching name
+                        // Targeted field manager (only inside volumes with matching PHYSICAL name)
+                        localFM = new G4FieldManager();
+                        localFM->SetDetectorField(field);
+                        localFM->SetChordFinder(chordFinder);
+
                         bool foundAny = false;
-
-                        localFieldMgr = new G4FieldManager();
-                        localFieldMgr->SetDetectorField(field);
-                        localFieldMgr->SetChordFinder(chordFinder);
-
-                        for (auto* pv : *G4PhysicalVolumeStore::GetInstance()) {
+                        for (auto* pv : *G4PhysicalVolumeStore::GetInstance())
+                        {
                             if (!pv) continue;
                             if (pv->GetName() != gEMFieldTargetPVName) continue;
+
                             foundAny = true;
-                            pv->GetLogicalVolume()->SetFieldManager(localFieldMgr, true);
+                            pv->GetLogicalVolume()->SetFieldManager(localFM, true); // force to daughters
                         }
 
-                        if (!foundAny) {
-                            G4cout << "[Field] WARNING: no physical volume found with name '"
-                                << gEMFieldTargetPVName << "'; no targeted EM field attached." << G4endl;
+                        if (!foundAny)
+                        {
+                            G4cout << "[Field] WARNING: no PV found with name '" << gEMFieldTargetPVName
+                                << "'. No targeted EM field attached." << G4endl;
                         }
-                        else {
-                            G4cout << "[Field] Enabled targeted EM field (F05Field) for PV name '"
-                                << gEMFieldTargetPVName << "'. minStep="
-                                << gEMFieldMinStep / mm << " mm" << G4endl;
+                        else
+                        {
+                            G4cout << "[Field] Targeted EM field enabled for PV name '" << gEMFieldTargetPVName
+                                << "'. minStep=" << gEMFieldMinStep / mm << " mm" << G4endl;
                         }
                     }
 
                     fieldAttached = true;
                 }
             }
-        }
+            }
+        };
 
-};
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
@@ -300,6 +333,8 @@ public:
 #include <G4UIcmdWithABool.hh>
 #include <G4RunManagerFactory.hh>
 #include <G4UIcmdWithADoubleAndUnit.hh>
+#include <G4UIcmdWith3VectorAndUnit.hh>
+
 
 class Action : public G4VUserActionInitialization, public G4UImessenger
 {
@@ -312,6 +347,19 @@ private:
     G4UIcmdWithABool* fCmdEnableEMField = nullptr; ///< enable EM field
     G4UIcmdWithAString* fCmdEMFieldTargetPV = nullptr; ///< EM field target (physical volume name,defaults to world if none given)
     G4UIcmdWithADoubleAndUnit* fCmdEMFieldMinStep = nullptr; ///<EM field min step
+
+
+    G4UIcmdWith3VectorAndUnit* fCmdEMFieldB = nullptr; // EM Field Params start
+    G4UIcmdWith3VectorAndUnit* fCmdEMFieldE = nullptr;
+
+    G4UIcmdWithAString* fCmdEMFieldMode = nullptr;
+
+    G4UIcmdWithADoubleAndUnit* fCmdRadialU = nullptr;
+    G4UIcmdWithADoubleAndUnit* fCmdRadialR1 = nullptr;
+    G4UIcmdWithADoubleAndUnit* fCmdRadialR2 = nullptr;
+    G4UIcmdWithADoubleAndUnit* fCmdRadialRmin = nullptr;
+    G4UIcmdWithADoubleAndUnit* fCmdRadialRmax = nullptr;
+    G4UIcmdWithADoubleAndUnit* fCmdRadialZmax = nullptr; // EM Field params finish
 public:
     Action() : G4VUserActionInitialization(), G4UImessenger() {
         fCmdPhys = new G4UIcmdWithAString("/physics_lists/select", this);
@@ -345,6 +393,60 @@ public:
         fCmdEMFieldMinStep->SetUnitCategory("Length");
         fCmdEMFieldMinStep->SetDefaultUnit("mm");
         fCmdEMFieldMinStep->AvailableForStates(G4State_PreInit);
+
+        fCmdEMFieldB = new G4UIcmdWith3VectorAndUnit("/particle/EMFieldB", this);
+        fCmdEMFieldB->SetGuidance("Uniform magnetic field vector. Example: /particle/EMFieldB 0 0 1 tesla");
+        fCmdEMFieldB->SetUnitCategory("Magnetic flux density");
+        fCmdEMFieldB->SetDefaultUnit("tesla");
+        fCmdEMFieldB->AvailableForStates(G4State_PreInit);
+
+        fCmdEMFieldE = new G4UIcmdWith3VectorAndUnit("/particle/EMFieldE", this);
+        fCmdEMFieldE->SetGuidance("Uniform electric field vector. Example: /particle/EMFieldE 0 0 1 volt/m");
+        fCmdEMFieldE->SetUnitCategory("Electric field");
+        fCmdEMFieldE->SetDefaultUnit("volt/m");
+        fCmdEMFieldE->AvailableForStates(G4State_PreInit);
+
+        fCmdEMFieldMode = new G4UIcmdWithAString("/particle/EMFieldMode", this);
+        fCmdEMFieldMode->SetGuidance("Field mode: 'uniform' or 'radialE'. PreInit only.");
+        fCmdEMFieldMode->SetParameterName("mode", false);
+        fCmdEMFieldMode->AvailableForStates(G4State_PreInit);
+
+        // Radial-E parameters (all PreInit only)
+        fCmdRadialU = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialU", this);
+        fCmdRadialU->SetGuidance("Radial E scale U (units Electric field).");
+        fCmdRadialU->SetUnitCategory("Electric field");
+        fCmdRadialU->SetDefaultUnit("volt/m");
+        fCmdRadialU->AvailableForStates(G4State_PreInit);
+
+        fCmdRadialR1 = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialR1", this);
+        fCmdRadialR1->SetGuidance("Radial model R1.");
+        fCmdRadialR1->SetUnitCategory("Length");
+        fCmdRadialR1->SetDefaultUnit("mm");
+        fCmdRadialR1->AvailableForStates(G4State_PreInit);
+
+        fCmdRadialR2 = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialR2", this);
+        fCmdRadialR2->SetGuidance("Radial model R2.");
+        fCmdRadialR2->SetUnitCategory("Length");
+        fCmdRadialR2->SetDefaultUnit("mm");
+        fCmdRadialR2->AvailableForStates(G4State_PreInit);
+
+        fCmdRadialRmin = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialRmin", this);
+        fCmdRadialRmin->SetGuidance("Radial model active region minimum r.");
+        fCmdRadialRmin->SetUnitCategory("Length");
+        fCmdRadialRmin->SetDefaultUnit("mm");
+        fCmdRadialRmin->AvailableForStates(G4State_PreInit);
+
+        fCmdRadialRmax = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialRmax", this);
+        fCmdRadialRmax->SetGuidance("Radial model active region maximum r.");
+        fCmdRadialRmax->SetUnitCategory("Length");
+        fCmdRadialRmax->SetDefaultUnit("mm");
+        fCmdRadialRmax->AvailableForStates(G4State_PreInit);
+
+        fCmdRadialZmax = new G4UIcmdWithADoubleAndUnit("/particle/EMFieldRadialZmax", this);
+        fCmdRadialZmax->SetGuidance("Radial model active region |z| <= Zmax.");
+        fCmdRadialZmax->SetUnitCategory("Length");
+        fCmdRadialZmax->SetDefaultUnit("mm");
+        fCmdRadialZmax->AvailableForStates(G4State_PreInit);
     }
     ~Action() {
         delete fCmdDTXSBoost;
@@ -355,6 +457,15 @@ public:
         delete fCmdEnableEMField;
         delete fCmdEMFieldTargetPV;
         delete fCmdEMFieldMinStep;
+        delete fCmdEMFieldB;
+        delete fCmdEMFieldE;
+        delete fCmdEMFieldMode;
+        delete fCmdRadialU;
+        delete fCmdRadialR1;
+        delete fCmdRadialR2;
+        delete fCmdRadialRmin;
+        delete fCmdRadialRmax;
+        delete fCmdRadialZmax;
     }
     void Build() const {
         SetUserAction(new Generator);
@@ -385,6 +496,25 @@ public:
             gEMFieldMinStep = fCmdEMFieldMinStep->GetNewDoubleValue(value);
             return;
         }
+        if (cmd == fCmdEMFieldB) {
+            gFieldB = fCmdEMFieldB->GetNew3VectorValue(value);
+            return;
+        }
+        if (cmd == fCmdEMFieldE) {
+            gFieldE = fCmdEMFieldE->GetNew3VectorValue(value);
+            return;
+        }
+        if (cmd == fCmdEMFieldMode) {
+            if (value == "radialE" || value == "radial") gEMFieldMode = EMFieldMode::RadialE;
+            else gEMFieldMode = EMFieldMode::UniformOnly;
+            return;
+        }
+        if (cmd == fCmdRadialU) { gRadialU = fCmdRadialU->GetNewDoubleValue(value);   return; }
+        if (cmd == fCmdRadialR1) { gRadialR1 = fCmdRadialR1->GetNewDoubleValue(value);  return; }
+        if (cmd == fCmdRadialR2) { gRadialR2 = fCmdRadialR2->GetNewDoubleValue(value);  return; }
+        if (cmd == fCmdRadialRmin) { gRadialRmin = fCmdRadialRmin->GetNewDoubleValue(value);return; }
+        if (cmd == fCmdRadialRmax) { gRadialRmax = fCmdRadialRmax->GetNewDoubleValue(value);return; }
+        if (cmd == fCmdRadialZmax) { gRadialZmax = fCmdRadialZmax->GetNewDoubleValue(value);return; }
         if (cmd != fCmdPhys) return;
         auto run = G4RunManager::GetRunManager();
         G4PhysListFactory factory;
