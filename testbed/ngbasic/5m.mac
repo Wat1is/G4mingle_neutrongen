@@ -1,0 +1,89 @@
+# print macro commands on screen
+/control/verbose 1
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/process/verbose 0
+/physics_lists/select QGSP_BIC_AllHP
+/run/useMaximumLogicalCores
+
+
+/particle/enableDTXSBoost true
+/particle/DTXSBoostVolume TARGET
+
+/particle/EnableEMField true
+/particle/EMFieldTargetPV ReactionChamber
+/particle/EMFieldMode radialE
+/particle/EMFieldRadialU    80000000 volt/m
+/particle/EMFieldRadialR1   20 mm
+/particle/EMFieldRadialR2   96 mm
+/particle/EMFieldRadialRmin 10 mm
+/particle/EMFieldRadialRmax 47.5 mm
+/particle/EMFieldRadialZmax 180 mm
+/particle/EMFieldMinStep 0.05 mm
+
+
+/particle/EnableImpBias true
+/particle/ImpBiasXMin -25 cm
+/particle/ImpBiasXMax  53 cm
+/particle/ImpBiasHalfY 25 cm
+/particle/ImpBiasHalfZ 25 cm
+
+/particle/ImpBiasNSlabs 16
+/particle/ImpBiasWorldImportance 1.0
+/particle/ImpBiasRatio 1.30
+
+
+# initialize geometry and physics
+/run/initialize
+
+
+# neutrons from a PuBe generator
+
+/particle/KeepOnlyNG true
+/gps/particle deuteron
+
+/gps/ene/type Mono
+/gps/ene/mono 2 MeV
+
+/gps/pos/type Point
+/gps/pos/centre 47.5 0 0 mm
+
+/gps/direction -1 0 0
+
+#/gps/number 100000
+/gps/number 5000
+
+#MESH SCORING
+/score/create/boxMesh DetectorMesh
+/score/mesh/boxSize 2.5 20. 20. cm
+/score/mesh/nBin 1 400 400
+/score/mesh/translate/xyz 50. 0. 0. cm
+/score/quantity/energyDeposit eDep MeV
+/score/filter/particle penergyfilter proton
+/score/close
+/score/list
+
+/score/create/boxMesh ReactionChamber 
+/score/mesh/boxSize 10. 10. 10. cm
+/score/mesh/nBin 1 1 1
+/score/quantity/population nPop_RC
+/score/filter/particle nPopRCFilter neutron
+/score/close
+
+
+
+# turn on progress report
+/control/verbose 0
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/process/verbose 0
+# start simulation
+#/run/beamOn 10000
+/run/beamOn 1000
+
+
+/score/dumpQuantityToFile DetectorMesh eDep energy_per_mm2_5m.txt
+/score/dumpQuantityToFile ReactionChamber nPop_RC  nPop_ReactionChamber.txt
+

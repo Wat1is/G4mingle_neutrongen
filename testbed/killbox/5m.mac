@@ -1,5 +1,5 @@
 # print macro commands on screen
-/control/verbose 0
+/control/verbose 1
 
 /run/useMaximumLogicalCores
 
@@ -25,6 +25,7 @@
 /gps/pos/halfx 20 cm
 /gps/pos/halfy 14.8 cm
 /gps/ang/type iso
+/gps/number 10
 
 
 
