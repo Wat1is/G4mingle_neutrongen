@@ -398,13 +398,10 @@ namespace {
         static G4VModularPhysicsList* lastPL = nullptr;
         if (pl == lastPL) return;
 
+        // PreInit-safe: do NOT touch the ghost world here.
+        // Use world-name ctor, then later SetWorld(ghostWorld) after /run/initialize.
         if (!gImpSampler) {
-            auto* ghostWorld = gImpPW ? gImpPW->GetWorldVolume() : nullptr;
-            if (!ghostWorld) {
-                G4cout << "[ImpBias] Cannot create G4GeometrySampler: ghost world not available yet." << G4endl;
-                return;
-            }
-            gImpSampler = std::make_unique<G4GeometrySampler>(ghostWorld, gImpParticleName);
+            gImpSampler = std::make_unique<G4GeometrySampler>("world", gImpParticleName);
             gImpSampler->SetParallel(true);
         }
 
@@ -413,6 +410,7 @@ namespace {
 
         gImpPhysicsRegistered = true;
         lastPL = pl;
+        
     }
 
     inline void ConfigureImportanceBiasing()
@@ -421,16 +419,21 @@ namespace {
         if (!gImpPhysicsRegistered) return;
         if (!gImpPW) return;
 
-        // Build store once (shared), then add biasing process once per thread.
+        auto* ghostWorld = gImpPW->GetWorldVolume();
+        if (!ghostWorld) return; // /run/initialize not done yet
+
+        if (!gImpSampler) {
+            gImpSampler = std::make_unique<G4GeometrySampler>("world", gImpParticleName);
+            gImpSampler->SetParallel(true);
+        }
+
+        // Now the ghost world exists -> bind it to the sampler
+        gImpSampler->SetParallel(true);
+        gImpSampler->SetWorld(ghostWorld);
+
         if (!gImpConfiguredStore)
         {
-            auto* ghostWorld = gImpPW->GetWorldVolume();
-            if (!ghostWorld) return; // typically means /run/initialize not done yet
-
-            // IStore is keyed by parallel world name inside Geant4
             auto* iStore = G4IStore::GetInstance(gImpParallelWorldName);
-
-            // Re-fill from scratch (safe if you re-run in same process)
             iStore->Clear();
 
             // World cell: copy/replica no. 0
@@ -453,8 +456,16 @@ namespace {
                     G4GeometryCell(*slabs[i], slabs[i]->GetCopyNo())
                 );
             }
+
+            // Build configurators from the store
+            gImpSampler->ClearSampling();
+            gImpSampler->PrepareImportanceSampling(iStore, nullptr);
+            gImpSampler->Configure();
+
+            gImpConfiguredStore = true;
         }
 
+        // Attach process once per worker thread
         static thread_local bool added = false;
         if (!added)
         {
@@ -790,9 +801,6 @@ public:
             const bool en = fCmdEnableImpBias->GetNewBoolValue(value);
             gEnableImpBias.store(en, std::memory_order_relaxed);
             gImpConfiguredStore = false;
-            if (en && gCurrentPhysList) {
-                RegisterImportanceBiasingPhysics(gCurrentPhysList);
-            }
             return;
         }
         if (cmd == fCmdImpBiasNSlabs) { gImpNSlabs = fCmdImpBiasNSlabs->GetNewIntValue(value); gImpConfiguredStore = false; return; }
@@ -806,8 +814,13 @@ public:
         if (cmd == fCmdPhys) {
             auto run = G4RunManager::GetRunManager();
             G4PhysListFactory factory;
+
             G4VModularPhysicsList* physicsList1 = factory.GetReferencePhysList(value);
+            gCurrentPhysList = physicsList1;
+
             RegisterDTBiasingPhysics(physicsList1);
+            RegisterImportanceBiasingPhysics(physicsList1);
+
             run->SetUserInitialization(physicsList1);
         }
         else return;

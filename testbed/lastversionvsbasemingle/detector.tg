@@ -17,26 +17,11 @@
 
 :mate Killbox 1 1 0.01
 
-:ISOT H2 1 1 2.014
-:ISOT H3 1 2 3.016
-
-:ELEM_FROM_ISOT Deuterium D 1 H2 1.0
-:ELEM_FROM_ISOT Tritium   T 1 H3 1.0
-
-:MIXT TargetMaterial        0.001          2 Tritium 0.6 Deuterium 0.4
-:MIXT DeuteriumTritiumGas   9.6e-15        2 Tritium 0.6 Deuterium 0.4
-
 :VOLU world BOX 3*m 3*m 3*m G4_AIR
 :VOLU Scintillator BOX 2.5*cm 20*cm 20*cm PolystyreneApprox
-:VOLU Cover BOX 0.1*cm 20*cm 20*cm G4_Al
-
-:VOLU ReactionChamber TUBE 10.001 48 176 DeuteriumTritiumGas
-:VOLU TARGET TUBE 0 10 174.5 TargetMaterial
-
-
-
-
-
+:VOLU Cover BOX 0.1*cm 20*cm 20*cm G4_AIR
+:VOLU NS BOX 4*cm 10*cm 20*cm NS
+:VOLU Dcube BOX 2.5*cm 1*cm 1*cm G4_STAINLESS-STEEL
 
 
 
@@ -46,9 +31,6 @@
 :PLACE Scintillator 1 world r000 50*cm 0 0 
 
 :PLACE Cover 2 world r000 47.4*cm 0 0
-
-
-:PLACE TARGET 3 world r000 0 0 0
 
 
 :vis world OFF
