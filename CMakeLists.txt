@@ -24,9 +24,9 @@ endif()  # set RPATH in executable on Mac (must be before add_executable(...))
 
 set(SOURCES
   ${PROJECT_NAME}.cc
-  GB01BOptrChangeCrossSection.cc
-  GB01BOptrMultiParticleChangeCrossSection.cc
-  F05Field.cc   
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/GB01BOptrChangeCrossSection.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/GB01BOptrMultiParticleChangeCrossSection.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/F05Field.cc   
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
