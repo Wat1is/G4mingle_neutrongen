@@ -22,6 +22,16 @@ if(APPLE) # https://gitlab.kitware.com/cmake/community/-/wikis/doc/cmake/RPATH-h
   set(CMAKE_INSTALL_RPATH "${Geant4_DIR}/../..")
 endif()  # set RPATH in executable on Mac (must be before add_executable(...))
 
-add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cc)
+set(SOURCES
+  ${PROJECT_NAME}.cc
+  GB01BOptrChangeCrossSection.cc
+  GB01BOptrMultiParticleChangeCrossSection.cc
+  F05Field.cc   
+)
+
+add_executable(${PROJECT_NAME} ${SOURCES})
+target_include_directories(${PROJECT_NAME} PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 target_link_libraries(${PROJECT_NAME} ${Geant4_LIBRARIES})
 install(TARGETS ${PROJECT_NAME}) # enable cmake --install
