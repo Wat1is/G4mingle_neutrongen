@@ -1,15 +1,244 @@
-// from Geant4 basic example B1
-:volu World BOX 120 120 180 G4_AIR
-:volu Envelope BOX 100 100 150 G4_WATER
-:volu Shape1 CONS 0 20 0 40 30 0 360 G4_A-150_TISSUE
-:volu Shape2 TRD 60 60 50 80 30 G4_BONE_COMPACT_ICRU
+:MIXT PolystyreneApprox 1.06*g/cm3 2
+ G4_C 0.9226
+ G4_H 0.0774                    
 
-:rotm r000 0 0 0
-:place Envelope 1 World  r000 0  0   0
-:place Shape1 1 Envelope r000 0  20 -70
-:place Shape2 2 Envelope r000 0 -10  70
+:VOLU world BOX 1.5*m 1.5*m 1.5*m G4_AIR
+:VOLU Scintillator BOX 2.5*cm 20*cm 20*cm PolystyreneApprox
+:VOLU tube TUBE 0.3*cm 0.4*cm 25*cm G4_STAINLESS-STEEL
+:VOLU Wat TUBE 0*cm 0.3*cm 25*cm G4_WATER
+:VOLU WatF TUBE 0*cm 0.3*cm 25*cm G4_AIR
+:VOLU Cover BOX 0.1*cm 20*cm 20*cm G4_Al
 
-:vis World OFF
-:color Envelope 0.1 0.1 0.9 0.2
-:color Shape1 0.9 0.1 0.1
-:color Shape2 0.1 0.9 0.1
+
+
+
+:rotm r000 0 0 0 
+
+:PLACE Scintillator 1 world r000 32.5*cm 0 0 
+
+:PLACE Cover 2 world r000 29.9*cm 0 0 
+
+:PLACE tube 3 world r000 29.4*cm 0.45*cm 0
+:PLACE tube 4 world r000 29.4*cm 1.35*cm 0
+:PLACE tube 5 world r000 29.4*cm 2.25*cm 0
+:PLACE tube 6 world r000 29.4*cm 3.15*cm 0
+:PLACE tube 7 world r000 29.4*cm 4.05*cm 0
+:PLACE tube 8 world r000 29.4*cm -0.45*cm 0
+:PLACE tube 9 world r000 29.4*cm -1.35*cm 0
+:PLACE tube 10 world r000 29.4*cm -2.25*cm 0
+:PLACE tube 11 world r000 29.4*cm -3.15*cm 0
+:PLACE tube 12 world r000 29.4*cm -4.05*cm 0
+
+:PLACE tube 13 world r000 28.5*cm 0.45*cm 0
+:PLACE tube 14 world r000 28.5*cm 1.35*cm 0
+:PLACE tube 15 world r000 28.5*cm 2.25*cm 0
+:PLACE tube 16 world r000 28.5*cm 3.15*cm 0
+:PLACE tube 17 world r000 28.5*cm 4.05*cm 0
+:PLACE tube 18 world r000 28.5*cm -0.45*cm 0
+:PLACE tube 19 world r000 28.5*cm -1.35*cm 0
+:PLACE tube 20 world r000 28.5*cm -2.25*cm 0
+:PLACE tube 21 world r000 28.5*cm -3.15*cm 0
+:PLACE tube 22 world r000 28.5*cm -4.05*cm 0
+
+:PLACE tube 23 world r000 27.6*cm 0.45*cm 0
+:PLACE tube 24 world r000 27.6*cm 1.35*cm 0
+:PLACE tube 25 world r000 27.6*cm 2.25*cm 0
+:PLACE tube 26 world r000 27.6*cm 3.15*cm 0
+:PLACE tube 27 world r000 27.6*cm 4.05*cm 0
+:PLACE tube 28 world r000 27.6*cm -0.45*cm 0
+:PLACE tube 29 world r000 27.6*cm -1.35*cm 0
+:PLACE tube 30 world r000 27.6*cm -2.25*cm 0
+:PLACE tube 31 world r000 27.6*cm -3.15*cm 0
+:PLACE tube 32 world r000 27.6*cm -4.05*cm 0
+
+:PLACE tube 33 world r000 26.7*cm 0.45*cm 0
+:PLACE tube 34 world r000 26.7*cm 1.35*cm 0
+:PLACE tube 35 world r000 26.7*cm 2.25*cm 0
+:PLACE tube 36 world r000 26.7*cm 3.15*cm 0
+:PLACE tube 37 world r000 26.7*cm 4.05*cm 0
+:PLACE tube 38 world r000 26.7*cm -0.45*cm 0
+:PLACE tube 39 world r000 26.7*cm -1.35*cm 0
+:PLACE tube 40 world r000 26.7*cm -2.25*cm 0
+:PLACE tube 41 world r000 26.7*cm -3.15*cm 0
+:PLACE tube 42 world r000 26.7*cm -4.05*cm 0
+
+:PLACE tube 43 world r000 25.8*cm 0.45*cm 0
+:PLACE tube 44 world r000 25.8*cm 1.35*cm 0
+:PLACE tube 45 world r000 25.8*cm 2.25*cm 0
+:PLACE tube 46 world r000 25.8*cm 3.15*cm 0
+:PLACE tube 47 world r000 25.8*cm 4.05*cm 0
+:PLACE tube 48 world r000 25.8*cm -0.45*cm 0
+:PLACE tube 49 world r000 25.8*cm -1.35*cm 0
+:PLACE tube 50 world r000 25.8*cm -2.25*cm 0
+:PLACE tube 51 world r000 25.8*cm -3.15*cm 0
+:PLACE tube 52 world r000 25.8*cm -4.05*cm 0
+
+:PLACE tube 53 world r000 24.9*cm 0.45*cm 0
+:PLACE tube 54 world r000 24.9*cm 1.35*cm 0
+:PLACE tube 55 world r000 24.9*cm 2.25*cm 0
+:PLACE tube 56 world r000 24.9*cm 3.15*cm 0
+:PLACE tube 57 world r000 24.9*cm 4.05*cm 0
+:PLACE tube 58 world r000 24.9*cm -0.45*cm 0
+:PLACE tube 59 world r000 24.9*cm -1.35*cm 0
+:PLACE tube 60 world r000 24.9*cm -2.25*cm 0
+:PLACE tube 61 world r000 24.9*cm -3.15*cm 0
+:PLACE tube 62 world r000 24.9*cm -4.05*cm 0
+
+:PLACE tube 63 world r000 24*cm 0.45*cm 0
+:PLACE tube 64 world r000 24*cm 1.35*cm 0
+:PLACE tube 65 world r000 24*cm 2.25*cm 0
+:PLACE tube 66 world r000 24*cm 3.15*cm 0
+:PLACE tube 67 world r000 24*cm 4.05*cm 0
+:PLACE tube 68 world r000 24*cm -0.45*cm 0
+:PLACE tube 69 world r000 24*cm -1.35*cm 0
+:PLACE tube 70 world r000 24*cm -2.25*cm 0
+:PLACE tube 71 world r000 24*cm -3.15*cm 0
+:PLACE tube 72 world r000 24*cm -4.05*cm 0
+
+:PLACE tube 73 world r000 23.1*cm 0.45*cm 0
+:PLACE tube 74 world r000 23.1*cm 1.35*cm 0
+:PLACE tube 75 world r000 23.1*cm 2.25*cm 0
+:PLACE tube 76 world r000 23.1*cm 3.15*cm 0
+:PLACE tube 77 world r000 23.1*cm 4.05*cm 0
+:PLACE tube 78 world r000 23.1*cm -0.45*cm 0
+:PLACE tube 79 world r000 23.1*cm -1.35*cm 0
+:PLACE tube 80 world r000 23.1*cm -2.25*cm 0
+:PLACE tube 81 world r000 23.1*cm -3.15*cm 0
+:PLACE tube 82 world r000 23.1*cm -4.05*cm 0
+
+:PLACE tube 83 world r000 22.2*cm 0.45*cm 0
+:PLACE tube 84 world r000 22.2*cm 1.35*cm 0
+:PLACE tube 85 world r000 22.2*cm 2.25*cm 0
+:PLACE tube 86 world r000 22.2*cm 3.15*cm 0
+:PLACE tube 87 world r000 22.2*cm 4.05*cm 0
+:PLACE tube 88 world r000 22.2*cm -0.45*cm 0
+:PLACE tube 89 world r000 22.2*cm -1.35*cm 0
+:PLACE tube 90 world r000 22.2*cm -2.25*cm 0
+:PLACE tube 91 world r000 22.2*cm -3.15*cm 0
+:PLACE tube 92 world r000 22.2*cm -4.05*cm 0
+
+:PLACE tube 93 world r000 21.3*cm 0.45*cm 0
+:PLACE tube 94 world r000 21.3*cm 1.35*cm 0
+:PLACE tube 95 world r000 21.3*cm 2.25*cm 0
+:PLACE tube 96 world r000 21.3*cm 3.15*cm 0
+:PLACE tube 97 world r000 21.3*cm 4.05*cm 0
+:PLACE tube 98 world r000 21.3*cm -0.45*cm 0
+:PLACE tube 99 world r000 21.3*cm -1.35*cm 0
+:PLACE tube 100 world r000 21.3*cm -2.25*cm 0
+:PLACE tube 101 world r000 21.3*cm -3.15*cm 0
+:PLACE tube 102 world r000 21.3*cm -4.05*cm 0
+
+
+
+
+:PLACE WatF 103 world r000 29.4*cm 0.45*cm 0
+:PLACE Wat 104 world r000 29.4*cm 1.35*cm 0
+:PLACE Wat 105 world r000 29.4*cm 2.25*cm 0
+:PLACE Wat 106 world r000 29.4*cm 3.15*cm 0
+:PLACE Wat 107 world r000 29.4*cm 4.05*cm 0
+:PLACE WatF 108 world r000 29.4*cm -0.45*cm 0
+:PLACE Wat 109 world r000 29.4*cm -1.35*cm 0
+:PLACE Wat 110 world r000 29.4*cm -2.25*cm 0
+:PLACE Wat 111 world r000 29.4*cm -3.15*cm 0
+:PLACE Wat 112 world r000 29.4*cm -4.05*cm 0
+
+:PLACE WatF 113 world r000 28.5*cm 0.45*cm 0
+:PLACE Wat 114 world r000 28.5*cm 1.35*cm 0
+:PLACE Wat 115 world r000 28.5*cm 2.25*cm 0
+:PLACE Wat 116 world r000 28.5*cm 3.15*cm 0
+:PLACE Wat 117 world r000 28.5*cm 4.05*cm 0
+:PLACE WatF 118 world r000 28.5*cm -0.45*cm 0
+:PLACE Wat 119 world r000 28.5*cm -1.35*cm 0
+:PLACE Wat 120 world r000 28.5*cm -2.25*cm 0
+:PLACE Wat 121 world r000 28.5*cm -3.15*cm 0
+:PLACE Wat 122 world r000 28.5*cm -4.05*cm 0
+
+:PLACE WatF 123 world r000 27.6*cm 0.45*cm 0
+:PLACE Wat 124 world r000 27.6*cm 1.35*cm 0
+:PLACE Wat 125 world r000 27.6*cm 2.25*cm 0
+:PLACE Wat 126 world r000 27.6*cm 3.15*cm 0
+:PLACE Wat 127 world r000 27.6*cm 4.05*cm 0
+:PLACE WatF 128 world r000 27.6*cm -0.45*cm 0
+:PLACE Wat 129 world r000 27.6*cm -1.35*cm 0
+:PLACE Wat 130 world r000 27.6*cm -2.25*cm 0
+:PLACE Wat 131 world r000 27.6*cm -3.15*cm 0
+:PLACE Wat 132 world r000 27.6*cm -4.05*cm 0
+
+:PLACE WatF 133 world r000 26.7*cm 0.45*cm 0
+:PLACE Wat 134 world r000 26.7*cm 1.35*cm 0
+:PLACE Wat 135 world r000 26.7*cm 2.25*cm 0
+:PLACE Wat 136 world r000 26.7*cm 3.15*cm 0
+:PLACE Wat 137 world r000 26.7*cm 4.05*cm 0
+:PLACE WatF 138 world r000 26.7*cm -0.45*cm 0
+:PLACE Wat 139 world r000 26.7*cm -1.35*cm 0
+:PLACE Wat 140 world r000 26.7*cm -2.25*cm 0
+:PLACE Wat 141 world r000 26.7*cm -3.15*cm 0
+:PLACE Wat 142 world r000 26.7*cm -4.05*cm 0
+
+:PLACE WatF 143 world r000 25.8*cm 0.45*cm 0
+:PLACE Wat 144 world r000 25.8*cm 1.35*cm 0
+:PLACE Wat 145 world r000 25.8*cm 2.25*cm 0
+:PLACE Wat 146 world r000 25.8*cm 3.15*cm 0
+:PLACE Wat 147 world r000 25.8*cm 4.05*cm 0
+:PLACE WatF 148 world r000 25.8*cm -0.45*cm 0
+:PLACE Wat 149 world r000 25.8*cm -1.35*cm 0
+:PLACE Wat 150 world r000 25.8*cm -2.25*cm 0
+:PLACE Wat 151 world r000 25.8*cm -3.15*cm 0
+:PLACE Wat 152 world r000 25.8*cm -4.05*cm 0
+
+:PLACE WatF 153 world r000 24.9*cm 0.45*cm 0
+:PLACE Wat 154 world r000 24.9*cm 1.35*cm 0
+:PLACE Wat 155 world r000 24.9*cm 2.25*cm 0
+:PLACE Wat 156 world r000 24.9*cm 3.15*cm 0
+:PLACE Wat 157 world r000 24.9*cm 4.05*cm 0
+:PLACE WatF 158 world r000 24.9*cm -0.45*cm 0
+:PLACE Wat 159 world r000 24.9*cm -1.35*cm 0
+:PLACE Wat 160 world r000 24.9*cm -2.25*cm 0
+:PLACE Wat 161 world r000 24.9*cm -3.15*cm 0
+:PLACE Wat 162 world r000 24.9*cm -4.05*cm 0
+
+:PLACE WatF 163 world r000 24*cm 0.45*cm 0
+:PLACE Wat 164 world r000 24*cm 1.35*cm 0
+:PLACE Wat 165 world r000 24*cm 2.25*cm 0
+:PLACE Wat 166 world r000 24*cm 3.15*cm 0
+:PLACE Wat 167 world r000 24*cm 4.05*cm 0
+:PLACE WatF 168 world r000 24*cm -0.45*cm 0
+:PLACE Wat 169 world r000 24*cm -1.35*cm 0
+:PLACE Wat 170 world r000 24*cm -2.25*cm 0
+:PLACE Wat 171 world r000 24*cm -3.15*cm 0
+:PLACE Wat 172 world r000 24*cm -4.05*cm 0
+
+:PLACE WatF 173 world r000 23.1*cm 0.45*cm 0
+:PLACE Wat 174 world r000 23.1*cm 1.35*cm 0
+:PLACE Wat 175 world r000 23.1*cm 2.25*cm 0
+:PLACE Wat 176 world r000 23.1*cm 3.15*cm 0
+:PLACE Wat 177 world r000 23.1*cm 4.05*cm 0
+:PLACE WatF 178 world r000 23.1*cm -0.45*cm 0
+:PLACE Wat 179 world r000 23.1*cm -1.35*cm 0
+:PLACE Wat 180 world r000 23.1*cm -2.25*cm 0
+:PLACE Wat 181 world r000 23.1*cm -3.15*cm 0
+:PLACE Wat 182 world r000 23.1*cm -4.05*cm 0
+
+:PLACE WatF 183 world r000 22.2*cm 0.45*cm 0
+:PLACE Wat 184 world r000 22.2*cm 1.35*cm 0
+:PLACE Wat 185 world r000 22.2*cm 2.25*cm 0
+:PLACE Wat 186 world r000 22.2*cm 3.15*cm 0
+:PLACE Wat 187 world r000 22.2*cm 4.05*cm 0
+:PLACE WatF 188 world r000 22.2*cm -0.45*cm 0
+:PLACE Wat 189 world r000 22.2*cm -1.35*cm 0
+:PLACE Wat 190 world r000 22.2*cm -2.25*cm 0
+:PLACE Wat 191 world r000 22.2*cm -3.15*cm 0
+:PLACE Wat 192 world r000 22.2*cm -4.05*cm 0
+
+:PLACE WatF 193 world r000 24.9*cm 0.45*cm 0
+:PLACE Wat 194 world r000 24.9*cm 1.35*cm 0
+:PLACE Wat 195 world r000 24.9*cm 2.25*cm 0
+:PLACE Wat 196 world r000 24.9*cm 3.15*cm 0
+:PLACE Wat 197 world r000 24.9*cm 4.05*cm 0
+:PLACE WatF 198 world r000 24.9*cm -0.45*cm 0
+:PLACE Wat 199 world r000 24.9*cm -1.35*cm 0
+:PLACE Wat 200 world r000 24.9*cm -2.25*cm 0
+:PLACE Wat 201 world r000 24.9*cm -3.15*cm 0
+:PLACE Wat 202 world r000 24.9*cm -4.05*cm 0
+
+:vis world OFF

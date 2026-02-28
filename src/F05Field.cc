@@ -53,33 +53,34 @@ void F05Field::GetFieldValue(const G4double Point[4], G4double* Bfield) const
 {
 	// Point[0],Point[1],Point[2] are x-, y-, z-cordinates, Point[3] is time
 
-	G4double Ex, Ey;
-	G4double R2, R1, U;
-	R2 = 96;
-	R1 = 20;
-	U = 80000000*volt/m;
+	const G4double R1 = 20.0 * mm;
+	const G4double R2 = 96.0 * mm;
+	const G4double U = 8.0e7 * volt / m;
+	const G4double Rmin = 10.0 * mm;
+	const G4double Rmax = 48.0 * mm;
+	const G4double Zmax = 180.0 * mm;
 
- 	G4double posR = std::sqrt(std::pow(Point[0],2) + std::pow(Point[1],2));
- 	G4double cos_theta, sin_theta;
-	G4double Er = U / ((std::log(R2 / R1))*(G4double)posR);
+	const G4double x = Point[0];
+	const G4double y = Point[1];
+	const G4double z = Point[2];
+	const G4double posR = std::sqrt(x * x + y * y);
 
-  if (posR>=10&&posR<=48){
-     cos_theta = Point[0]/(G4double)posR;
-     sin_theta = Point[1]/(G4double)posR;
-     Ex = -1*(Er*cos_theta);//apply radial electric field
-     Ey = -1*(Er*sin_theta);
-  }else{
-     Ex=0;
-     Ey=0;
-  }
-  
-  Bfield[0]=0;
-  Bfield[1]=0;
-  Bfield[2]=0;
+	G4double Ex = 0.0;
+	G4double Ey = 0.0;
 
-  Bfield[3]=Ex;
-  Bfield[4]=Ey;
-  Bfield[5]=0;
+	if (posR > 0.0 && posR >= Rmin && posR <= Rmax && std::fabs(z) <= Zmax && R2 > R1)
+	{
+		const G4double Er = U / (std::log(R2 / R1) * posR);
+		const G4double cosTheta = x / posR;
+		const G4double sinTheta = y / posR;
+		Ex = -Er * cosTheta;
+		Ey = -Er * sinTheta;
+	}
 
-  return;
+	Bfield[0] = 0.0;
+	Bfield[1] = 0.0;
+	Bfield[2] = 0.0;
+	Bfield[3] = Ex;
+	Bfield[4] = Ey;
+	Bfield[5] = 0.0;
 }

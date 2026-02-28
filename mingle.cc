@@ -11,6 +11,7 @@
 #include <G4LogicalVolumeStore.hh>
 #include <G4PhysicalVolumeStore.hh>
 #include <cmath>
+#include <cstdlib>
 #include <G4SystemOfUnits.hh>
 #include <G4ios.hh>
 #include <G4ChordFinder.hh>
@@ -33,11 +34,12 @@
 #include <G4VUserActionInitialization.hh>
 #include <G4UserRunAction.hh>
 #include <G4Run.hh>
+#include <G4RunManager.hh>
 #include <G4VModularPhysicsList.hh>
 #include <G4GeometryCell.hh>
 
-#include <vector>
 #include <memory>
+#include <vector>
 #include <string>
 
 
@@ -92,12 +94,8 @@ namespace {
 
     // Set in main() / /physics_lists/select so UI commands can register biasing physics
     G4VModularPhysicsList* gCurrentPhysList = nullptr;
-
-    // Configured after /run/initialize
+    G4VModularPhysicsList* gImpRegisteredPhysList = nullptr;
     std::unique_ptr<G4GeometrySampler> gImpSampler;
-
-    bool gImpPhysicsRegistered = false;
-    bool gImpConfiguredStore = false;
 
 }
 
@@ -110,10 +108,12 @@ public:
 
     G4VPhysicalVolume* GetWorldVolume() { return GetWorld(); } // B02-style accessor
     const std::vector<G4VPhysicalVolume*>& GetSlabs() const { return fSlabPVs; }
+    const std::vector<G4double>& GetImportances() const { return fSlabImportances; }
 
     void Construct() override
     {
         fSlabPVs.clear();
+        fSlabImportances.clear();
 
         if (!gEnableImpBias.load(std::memory_order_relaxed)) return;
         if (gImpNSlabs <= 0) return;
@@ -126,38 +126,96 @@ public:
         if (!worldLV) return;
 
         auto* mat = G4NistManager::Instance()->FindOrBuildMaterial("G4_Galactic");
+        auto* worldBox = dynamic_cast<G4Box*>(worldLV->GetSolid());
+        if (!worldBox) {
+            G4cout << "[ImpBias] ERROR: parallel-world importance slabs require a box-shaped world." << G4endl;
+            return;
+        }
 
-        const G4double dx = (gImpXMax - gImpXMin) / gImpNSlabs;
+        const G4double worldHX = worldBox->GetXHalfLength();
+        const G4double worldHY = worldBox->GetYHalfLength();
+        const G4double worldHZ = worldBox->GetZHalfLength();
+
+        const G4double xMin = std::max(gImpXMin, -worldHX);
+        const G4double xMax = std::min(gImpXMax, worldHX);
+        if (xMax <= xMin) {
+            G4cout << "[ImpBias] ERROR: slab X range does not overlap the world volume." << G4endl;
+            return;
+        }
+
+        if (gImpHalfY < worldHY || gImpHalfZ < worldHZ) {
+            G4cout << "[ImpBias] WARNING: expanding slab Y/Z half-size to match the world volume and avoid world-cell gaps." << G4endl;
+        }
+
+        const G4double dx = (xMax - xMin) / gImpNSlabs;
         const G4double hx = 0.5 * dx;
+        G4int copyNo = 1;
 
-        for (G4int i = 0; i < gImpNSlabs; ++i)
-        {
-            const G4double x = gImpXMin + (i + 0.5) * dx;
+        auto addSlab = [&](const G4String& stem, G4double centerX, G4double halfX, G4double importance) {
+            const auto solidName = stem + "_s";
+            const auto lvName = stem + "_l";
+            const auto pvName = stem + "_p";
 
-            const auto solidName = G4String("impSlab_s_") + std::to_string(i);
-            const auto lvName = G4String("impSlab_l_") + std::to_string(i);
-            const auto pvName = G4String("impSlab_p_") + std::to_string(i);
-
-            auto* solid = new G4Box(solidName, hx, gImpHalfY, gImpHalfZ);
+            auto* solid = new G4Box(solidName, halfX, worldHY, worldHZ);
             auto* lv = new G4LogicalVolume(solid, mat, lvName);
-
             auto* pv = new G4PVPlacement(
                 nullptr,
-                G4ThreeVector(x, 0., 0.),
+                G4ThreeVector(centerX, 0., 0.),
                 lv,
                 pvName,
                 worldLV,
                 false,
-                (i + 1),
+                copyNo++,
                 false
             );
 
             fSlabPVs.push_back(pv);
+            fSlabImportances.push_back(importance);
+        };
+
+        if (xMin > -worldHX) {
+            const G4double halfX = 0.5 * (xMin + worldHX);
+            addSlab("impPre", -worldHX + halfX, halfX, gImpWorldImportance);
+        }
+
+        for (G4int i = 0; i < gImpNSlabs; ++i)
+        {
+            const G4double x = xMin + (i + 0.5) * dx;
+            const G4double importance =
+                gImpWorldImportance * std::pow(gImpRatio, static_cast<G4double>(i + 1));
+            addSlab(G4String("impSlab_") + std::to_string(i), x, hx, importance);
+        }
+
+        if (xMax < worldHX) {
+            const G4double halfX = 0.5 * (worldHX - xMax);
+            const G4double tailImportance =
+                gImpWorldImportance * std::pow(gImpRatio, static_cast<G4double>(gImpNSlabs));
+            addSlab("impPost", xMax + halfX, halfX, tailImportance);
+        }
+
+        auto* iStore = G4IStore::GetInstance(gImpParallelWorldName);
+        if (!iStore) return;
+
+        iStore->SetParallelWorldVolume(gImpParallelWorldName);
+        iStore->Clear();
+        iStore->AddImportanceGeometryCell(
+            gImpWorldImportance,
+            G4GeometryCell(*ghostWorldPV, 0)
+        );
+
+        for (std::size_t i = 0; i < fSlabPVs.size() && i < fSlabImportances.size(); ++i)
+        {
+            if (!fSlabPVs[i]) continue;
+            iStore->AddImportanceGeometryCell(
+                fSlabImportances[i],
+                G4GeometryCell(*fSlabPVs[i], fSlabPVs[i]->GetCopyNo())
+            );
         }
     }
 
 private:
     std::vector<G4VPhysicalVolume*> fSlabPVs;
+    std::vector<G4double> fSlabImportances;
 };
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -239,7 +297,7 @@ class Detector : public G4VUserDetectorConstruction
         void ConstructSDandField() override
         {
             // ============================================================
-            // (A) D/T XS boost operator (GB01) — attach once per thread
+            // (A) D/T XS boost operator (GB01) - attach once per thread
             // ============================================================
             if (gEnableDTXSBoost.load(std::memory_order_relaxed))
             {
@@ -280,7 +338,7 @@ class Detector : public G4VUserDetectorConstruction
             }
 
             // ============================================================
-            // (B) EM field (F05Field) — attach once per thread
+            // (B) EM field (F05Field) - attach once per thread
             // ============================================================
             if (gEnableEMField.load(std::memory_order_relaxed))
             {
@@ -393,95 +451,25 @@ namespace {
     {
         if (!pl) return;
         if (!gEnableImpBias.load(std::memory_order_relaxed)) return;
+        if (pl == gImpRegisteredPhysList) return;
 
-        // Register once per physics list instance
-        static G4VModularPhysicsList* lastPL = nullptr;
-        if (pl == lastPL) return;
-
-        // PreInit-safe: do NOT touch the ghost world here.
-        // Use world-name ctor, then later SetWorld(ghostWorld) after /run/initialize.
-        if (!gImpSampler) {
+        if (!gImpSampler)
+        {
+            // Create the sampler in PreInit with a placeholder world name.
+            // G4ImportanceBiasing will bind it to the parallel world during process construction.
             gImpSampler = std::make_unique<G4GeometrySampler>("world", gImpParticleName);
             gImpSampler->SetParallel(true);
         }
 
-        pl->RegisterPhysics(new G4ParallelWorldPhysics(gImpParallelWorldName));
         pl->RegisterPhysics(new G4ImportanceBiasing(gImpSampler.get(), gImpParallelWorldName));
+        pl->RegisterPhysics(new G4ParallelWorldPhysics(gImpParallelWorldName));
 
-        gImpPhysicsRegistered = true;
-        lastPL = pl;
-        
-    }
-
-    inline void ConfigureImportanceBiasing()
-    {
-        if (!gEnableImpBias.load(std::memory_order_relaxed)) return;
-        if (!gImpPhysicsRegistered) return;
-        if (!gImpPW) return;
-
-        auto* ghostWorld = gImpPW->GetWorldVolume();
-        if (!ghostWorld) return; // /run/initialize not done yet
-
-        if (!gImpSampler) {
-            gImpSampler = std::make_unique<G4GeometrySampler>("world", gImpParticleName);
-            gImpSampler->SetParallel(true);
-        }
-
-        // Now the ghost world exists -> bind it to the sampler
-        gImpSampler->SetParallel(true);
-        gImpSampler->SetWorld(ghostWorld);
-
-        if (!gImpConfiguredStore)
-        {
-            auto* iStore = G4IStore::GetInstance(gImpParallelWorldName);
-            iStore->Clear();
-
-            // World cell: copy/replica no. 0
-            iStore->AddImportanceGeometryCell(
-                gImpWorldImportance,
-                G4GeometryCell(*ghostWorld, 0)
-            );
-
-            // Slabs: use PV copy number
-            const auto& slabs = gImpPW->GetSlabs();
-            for (size_t i = 0; i < slabs.size(); ++i)
-            {
-                if (!slabs[i]) continue;
-
-                const G4double imp =
-                    gImpWorldImportance * std::pow(gImpRatio, (G4double)(i + 1));
-
-                iStore->AddImportanceGeometryCell(
-                    imp,
-                    G4GeometryCell(*slabs[i], slabs[i]->GetCopyNo())
-                );
-            }
-
-            // Build configurators from the store
-            gImpSampler->ClearSampling();
-            gImpSampler->PrepareImportanceSampling(iStore, nullptr);
-            gImpSampler->Configure();
-
-            gImpConfiguredStore = true;
-        }
-
-        // Attach process once per worker thread
-        static thread_local bool added = false;
-        if (!added)
-        {
-            gImpSampler->AddProcess();
-            added = true;
-        }
+        gImpRegisteredPhysList = pl;
     }
 }
 
 class RunAction : public G4UserRunAction
 {
-public:
-    void BeginOfRunAction(const G4Run*) override
-    {
-        ConfigureImportanceBiasing();
-    }
 };
 
 class KillboxSteppingAction : public G4UserSteppingAction
@@ -745,14 +733,11 @@ public:
 
     }
     void Build() const override {
-        ConfigureImportanceBiasing();
         SetUserAction(new RunAction);
         SetUserAction(new Generator);
         SetUserAction(new KillboxSteppingAction);
     }
-    void BuildForMaster() const override {
-        ConfigureImportanceBiasing();
-    }
+    void BuildForMaster() const override {}
     void SetNewValue(G4UIcommand* cmd, G4String value) {
         if (cmd == fCmdKeepOnly) {
             gKeepOnlyDTpnEnabled.store(fCmdKeepOnly->GetNewBoolValue(value), std::memory_order_relaxed);
@@ -800,22 +785,32 @@ public:
         if (cmd == fCmdEnableImpBias) {
             const bool en = fCmdEnableImpBias->GetNewBoolValue(value);
             gEnableImpBias.store(en, std::memory_order_relaxed);
-            gImpConfiguredStore = false;
+            if (en) {
+                RegisterImportanceBiasingPhysics(gCurrentPhysList);
+            }
             return;
         }
-        if (cmd == fCmdImpBiasNSlabs) { gImpNSlabs = fCmdImpBiasNSlabs->GetNewIntValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasXMin) { gImpXMin = fCmdImpBiasXMin->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasXMax) { gImpXMax = fCmdImpBiasXMax->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasHalfY) { gImpHalfY = fCmdImpBiasHalfY->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasHalfZ) { gImpHalfZ = fCmdImpBiasHalfZ->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasWorldI) { gImpWorldImportance = fCmdImpBiasWorldI->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdImpBiasRatio) { gImpRatio = fCmdImpBiasRatio->GetNewDoubleValue(value); gImpConfiguredStore = false; return; }
-        if (cmd == fCmdConfigureImpBias) { ConfigureImportanceBiasing(); return; }
+        if (cmd == fCmdImpBiasNSlabs) { gImpNSlabs = fCmdImpBiasNSlabs->GetNewIntValue(value); return; }
+        if (cmd == fCmdImpBiasXMin) { gImpXMin = fCmdImpBiasXMin->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdImpBiasXMax) { gImpXMax = fCmdImpBiasXMax->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdImpBiasHalfY) { gImpHalfY = fCmdImpBiasHalfY->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdImpBiasHalfZ) { gImpHalfZ = fCmdImpBiasHalfZ->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdImpBiasWorldI) { gImpWorldImportance = fCmdImpBiasWorldI->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdImpBiasRatio) { gImpRatio = fCmdImpBiasRatio->GetNewDoubleValue(value); return; }
+        if (cmd == fCmdConfigureImpBias) {
+            G4cout << "[ImpBias] INFO: importance biasing is configured automatically during /run/initialize." << G4endl;
+            return;
+        }
         if (cmd == fCmdPhys) {
             auto run = G4RunManager::GetRunManager();
             G4PhysListFactory factory;
 
             G4VModularPhysicsList* physicsList1 = factory.GetReferencePhysList(value);
+            if (!physicsList1) {
+                G4cout << "[Physics] ERROR: unknown physics list '" << value << "'." << G4endl;
+                return;
+            }
+
             gCurrentPhysList = physicsList1;
 
             RegisterDTBiasingPhysics(physicsList1);
@@ -839,9 +834,12 @@ public:
 
 int main(int argc,char** argv)
 {
-	auto *run = G4RunManagerFactory::CreateRunManager();
+	auto *run = G4RunManagerFactory::CreateRunManager(G4RunManagerType::MT);
 
 	G4ScoringManager::GetScoringManager(); // enable macro commands in /score/
+
+    auto* detector = new Detector;
+	run->SetUserInitialization(detector);
 
 
     G4PhysListFactory factory;
@@ -853,8 +851,6 @@ int main(int argc,char** argv)
     }
     run->SetUserInitialization(pl0);
 
-	run->SetUserInitialization(new Detector);
-
 	run->SetUserInitialization(new Action);
 
 
@@ -862,8 +858,11 @@ int main(int argc,char** argv)
 	G4VisManager *vis = new G4VisExecutive("quiet"); vis->Initialize();
 
 	if (argc==1) { // interactive mode
-		//G4UIExecutive ui(argc, argv);  TO FIX AV FALSE POSITIVE ON KEYBOARD READS ON UI MODE
-		//ui.SessionStart();
+		auto* ui = new G4UIExecutive(argc, argv);
+		auto* uiManager = G4UImanager::GetUIpointer();
+		uiManager->ApplyCommand("/control/execute menu.mac");
+		ui->SessionStart();
+		delete ui;
 	} else { // batch mode
 		G4String command = "/control/execute ";
 		G4UImanager::GetUIpointer()->ApplyCommand(command+argv[1]);

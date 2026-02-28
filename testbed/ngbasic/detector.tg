@@ -47,8 +47,8 @@
 
 :PLACE Cover 2 world r000 47.4*cm 0 0
 
-
-:PLACE TARGET 3 world r000 0 0 0
+:PLACE ReactionChamber 3 world r000 0 0 0
+:PLACE TARGET 4 world r000 0 0 0
 
 
 :vis world OFF

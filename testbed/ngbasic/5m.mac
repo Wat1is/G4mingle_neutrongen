@@ -36,9 +36,9 @@
 
 # initialize geometry and physics
 /run/initialize
+/particle/ConfigureImpBias
 
-
-# neutrons from a PuBe generator
+# deuterons fired into the D/T target
 
 /particle/KeepOnlyNG true
 /gps/particle deuteron
