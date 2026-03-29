@@ -1,0 +1,38 @@
+:MIXT_BY_NATOMS Polystyrene 1.06*g/cm3 2
+ C 8
+ H 8 
+
+:MIXT_BY_NATOMS EthylenGlycol 1.114*g/cm3 3
+ H 6
+ C 2
+ O 2
+
+:MIXT CoolingWater 1.13*g/cm3 2
+ G4_WATER 0.7
+ EthylenGlycol 0.3
+
+:MIXT CoolingMat 1.62782*g/cm3 2
+ CoolingWater 0.4740675
+ G4_Al 0.5259325
+
+:VOLU world BOX 2*m 2*m 2*m G4_AIR
+:VOLU Scintillator BOX 2.5*cm 20*cm 20*cm Polystyrene
+:VOLU tube TUBE 0.3*cm 0.4*cm 25*cm G4_STAINLESS-STEEL
+:VOLU Wat TUBE 0*cm 0.3*cm 25*cm G4_WATER
+:VOLU WatF TUBE 0*cm 0.3*cm 25*cm G4_AIR
+:VOLU Cover BOX 0.1*cm 20*cm 20*cm G4_Al
+:VOLU Shielding TUBS 78*mm 79*mm 346*mm 0 360 G4_Pb
+:VOLU Cooling TUBS 58.*mm 75.*mm 331*mm 0 360 CoolingMat
+
+
+
+
+:rotm r000 0 0 0 
+
+:PLACE Scintillator 1 world r000 45.1379*cm 0 0 
+:PLACE Cover 2 world r000 40.5373*cm 0 0
+
+:PLACE Shielding 3 world r000 -20*cm 0 -48*mm
+:PLACE Cooling 4 world r000 -20*cm 0 -48*mm
+
+:vis world OFF

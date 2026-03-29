@@ -1,0 +1,55 @@
+# print macro commands on screen
+/control/verbose 0
+
+
+# Initialize with some optimisations
+/run/useMaximumLogicalCores
+/run/initialize
+/run/setCut 100 km
+/run/setCutForAGivenParticle gamma 0.7 mm
+
+
+
+# Gamma addon source, optimised for 7.7x lower Gy
+/gps/particle gamma
+/gps/pos/type Volume
+/gps/pos/shape Cylinder
+/gps/pos/centre -20 0 0 cm
+/gps/pos/radius 10 mm
+/gps/pos/halfz 175 mm
+/gps/ang/type iso
+/gps/ene/type Gauss
+/gps/ene/mono 400 keV
+/gps/ene/sigma 50 keV
+/gps/ang/mintheta 72 deg
+/gps/ang/maxtheta 108 deg
+/gps/ang/minphi 162 deg
+/gps/ang/maxphi 198 deg
+/gps/number 100
+
+#MESH SCORING
+/score/create/boxMesh DetectorMesh
+/score/mesh/boxSize 2.5 20. 20. cm
+/score/mesh/nBin 1 1 1
+/score/mesh/translate/xyz 45.1379 0. 0. cm
+/score/quantity/energyDeposit eDep2 MeV
+/score/filter/particle genergyfilter gamma
+/score/close
+/score/list
+
+
+# turn on progress report
+/run/verbose 2
+/control/verbose 0
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/process/verbose 0
+# start simulation
+/run/beamOn 1050000
+
+
+
+/score/dumpQuantityToFile DetectorMesh eDep2 genergy_per_mm2_10m.txt
+
+

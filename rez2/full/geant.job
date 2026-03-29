@@ -1,0 +1,16 @@
+#!/bin/bash
+# sbatch --export=INP='INPUT' -J JOBNAME -N1 -nNPROC ./geant.job
+#  #SBATCH --time=01:05:00               # Time limit hrs:min:sec
+#SBATCH -e slurm-%j.err
+#SBATCH -o slurm-%j.out
+pwd; hostname; date
+echo inp $INP
+echo "SLURM" $SLURM_NTASKS 
+
+#echo /home/codeadmin/SCALE-6.2.1/bin/scalerte -m -z -T Temp -I 1 $INP
+#/home/codeadmin/SCALE-6.2.1/bin/scalerte -m -z -T Temp -I $SLURM_NTASKS $INP
+#/home/codeadmin/SCALE-6.2.3p/bin/scalerte -m -z -T Temp -N $SLURM_NTASKS $INP
+#srun /home/codeadmin/SCALE-6.2.1/bin/scalerte %x
+/home/codeadmin/spackcommon/mingle/build/mingle $INP
+
+date

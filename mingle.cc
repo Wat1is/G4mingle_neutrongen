@@ -30,6 +30,8 @@
 #include <G4Box.hh>
 #include <G4PVPlacement.hh>
 #include <G4LogicalVolume.hh>
+#include <G4Region.hh>
+#include <G4RegionStore.hh>
 #include <G4NistManager.hh>
 #include <G4VUserActionInitialization.hh>
 #include <G4UserRunAction.hh>
@@ -80,6 +82,12 @@ namespace {
     MingleImpParallelWorld* gImpPW = nullptr;
     std::atomic<bool> gEnableImpBias{ false };
 
+    enum class ImpBiasMode {
+        Neutron = 0,
+        Gamma = 1
+    };
+    ImpBiasMode gImpBiasMode = ImpBiasMode::Neutron;
+
     G4int    gImpNSlabs = 14;
     G4double gImpXMin = 0.0 * cm;
     G4double gImpXMax = 50.0 * cm;
@@ -90,12 +98,122 @@ namespace {
     G4double gImpRatio = 1.25;
 
     const G4String gImpParallelWorldName = "ImpWorld";
-    const G4String gImpParticleName = "neutron";
+    G4String gImpParticleName = "neutron";
+    const G4String gScintillatorVolumeName = "Scintillator";
+    const G4String gScintillatorRegionName = "Scintillator";
 
     // Set in main() / /physics_lists/select so UI commands can register biasing physics
     G4VModularPhysicsList* gCurrentPhysList = nullptr;
+    G4VModularPhysicsList* gDTRegisteredPhysList = nullptr;
     G4VModularPhysicsList* gImpRegisteredPhysList = nullptr;
     std::unique_ptr<G4GeometrySampler> gImpSampler;
+
+    inline const char* GetImpBiasModeName()
+    {
+        return (gImpBiasMode == ImpBiasMode::Gamma) ? "gamma" : "neutron";
+    }
+
+    inline bool IsImpBiasGammaMode()
+    {
+        return gImpBiasMode == ImpBiasMode::Gamma;
+    }
+
+    inline bool SetImpBiasModeFromString(const G4String& value)
+    {
+        G4String mode = value;
+        mode.toLower();
+
+        ImpBiasMode requestedMode = ImpBiasMode::Neutron;
+        if (mode == "gamma" || mode == "gammamode" || mode == "gamma_mode")
+        {
+            requestedMode = ImpBiasMode::Gamma;
+        }
+        else if (mode == "neutron" || mode == "neutronmode" || mode == "neutron_mode")
+        {
+            requestedMode = ImpBiasMode::Neutron;
+        }
+        else
+        {
+            G4cout << "[ImpBias] ERROR: unknown mode '" << value
+                   << "'. Use 'neutron' or 'gamma'." << G4endl;
+            return false;
+        }
+
+        if ((gDTRegisteredPhysList != nullptr || gImpRegisteredPhysList != nullptr || gImpSampler) &&
+            requestedMode != gImpBiasMode)
+        {
+            G4cout << "[ImpBias] ERROR: mode must be set before neutron/gamma-specific biasing physics is registered. "
+                   << "Set /particle/ImpBiasMode before enabling importance biasing, enabling D/T XS boost, "
+                   << "or before selecting a physics list."
+                   << G4endl;
+            return false;
+        }
+
+        gImpBiasMode = requestedMode;
+        gImpParticleName = IsImpBiasGammaMode() ? "gamma" : "neutron";
+        G4cout << "[ImpBias] Mode set to '" << GetImpBiasModeName()
+               << "' for particle '" << gImpParticleName << "'." << G4endl;
+        return true;
+    }
+
+    inline void AttachScintillatorRegion()
+    {
+        auto* regionStore = G4RegionStore::GetInstance();
+        if (!regionStore) return;
+
+        auto* region = regionStore->FindOrCreateRegion(gScintillatorRegionName);
+        std::size_t attachedCount = 0;
+        std::size_t skippedCount = 0;
+
+        auto attachVolume = [&](G4LogicalVolume* lv) {
+            if (!lv) return;
+            if (lv->GetRegion() == region) return;
+
+            auto* existingRegion = lv->GetRegion();
+            if (existingRegion != nullptr)
+            {
+                G4cout << "[Region] WARNING: logical volume '" << lv->GetName()
+                       << "' already belongs to region '" << existingRegion->GetName()
+                       << "'. Skipping attachment to region '" << region->GetName() << "'."
+                       << G4endl;
+                ++skippedCount;
+                return;
+            }
+
+            region->AddRootLogicalVolume(lv);
+            ++attachedCount;
+        };
+
+        for (auto* pv : *G4PhysicalVolumeStore::GetInstance())
+        {
+            if (!pv) continue;
+            if (pv->GetName() != gScintillatorVolumeName) continue;
+            attachVolume(pv->GetLogicalVolume());
+        }
+
+        if (attachedCount == 0 && skippedCount == 0)
+        {
+            for (auto* lv : *G4LogicalVolumeStore::GetInstance())
+            {
+                if (!lv) continue;
+                if (lv->GetName() != gScintillatorVolumeName) continue;
+                attachVolume(lv);
+            }
+        }
+
+        if (attachedCount > 0)
+        {
+            G4cout << "[Region] Attached region '" << region->GetName()
+                   << "' to " << attachedCount << " logical volume(s) named '"
+                   << gScintillatorVolumeName << "'." << G4endl;
+        }
+        else if (skippedCount == 0)
+        {
+            G4cout << "[Region] WARNING: no volume named '" << gScintillatorVolumeName
+                   << "' was found; region '" << region->GetName() << "' was not attached."
+                   << G4endl;
+        }
+    }
 
 }
 
@@ -292,7 +410,9 @@ class Detector : public G4VUserDetectorConstruction
         }
 		G4VPhysicalVolume* Construct() override {
 			G4tgbVolumeMgr::GetInstance()->AddTextFile("detector.tg");
-			return G4tgbVolumeMgr::GetInstance()->ReadAndConstructDetector();
+			auto* world = G4tgbVolumeMgr::GetInstance()->ReadAndConstructDetector();
+            AttachScintillatorRegion();
+			return world;
 		} ///< load detector definition from a text file "detector.tg"
         void ConstructSDandField() override
         {
@@ -440,11 +560,17 @@ namespace {
 
     inline void RegisterDTBiasingPhysics(G4VModularPhysicsList* pl)
     {
+        if (!pl) return;
+        if (!gEnableDTXSBoost.load(std::memory_order_relaxed)) return;
+        if (IsImpBiasGammaMode()) return;
+        if (pl == gDTRegisteredPhysList) return;
+
         // Required so GB01 operators can see wrapped biasing processes for these particles.
         auto* biasPhys = new G4GenericBiasingPhysics();
         biasPhys->Bias("deuteron");
         biasPhys->Bias("triton");
         pl->RegisterPhysics(biasPhys);
+        gDTRegisteredPhysList = pl;
     }
 
     inline void RegisterImportanceBiasingPhysics(G4VModularPhysicsList* pl)
@@ -479,7 +605,7 @@ public:
     {
         auto* track = step->GetTrack();
 
-        if (gKeepOnlyDTpnEnabled.load(std::memory_order_relaxed))
+        if (gKeepOnlyDTpnEnabled.load(std::memory_order_relaxed) && !IsImpBiasGammaMode())
         {
             auto* def = track->GetParticleDefinition();
 
@@ -568,6 +694,7 @@ private:
     G4UIcmdWithADoubleAndUnit* fCmdImpBiasHalfZ = nullptr;
     G4UIcmdWithADouble* fCmdImpBiasWorldI = nullptr;
     G4UIcmdWithADouble* fCmdImpBiasRatio = nullptr;
+    G4UIcmdWithAString* fCmdImpBiasMode = nullptr;
     G4UIcmdWithoutParameter* fCmdConfigureImpBias = nullptr;
 
 
@@ -581,8 +708,10 @@ public:
 
         fCmdKeepOnly = new G4UIcmdWithABool("/particle/KeepOnlyNG", this);
         fCmdKeepOnly->SetGuidance("true: kill everything except neutron/proton/deuteron/triton. false: disable.");
+        fCmdKeepOnly->SetGuidance("Ignored automatically in gamma importance-bias mode.");
         fCmdDTXSBoost = new G4UIcmdWithABool("/particle/enableDTXSBoost", this);
         fCmdDTXSBoost->SetGuidance("Enable GB01 D/T cross-section boost everywhere. Must be set before /run/initialize.");
+        fCmdDTXSBoost->SetGuidance("Ignored automatically in gamma importance-bias mode.");
         fCmdDTXSBoost->AvailableForStates(G4State_PreInit);
 
         fCmdDTXSBoostVolume = new G4UIcmdWithAString("/particle/DTXSBoostVolume", this);
@@ -661,8 +790,15 @@ public:
 
         // ---- Importance biasing (parallel world slabs) ----
         fCmdEnableImpBias = new G4UIcmdWithABool("/particle/EnableImpBias", this);
-        fCmdEnableImpBias->SetGuidance("Enable parallel-world slab importance biasing for neutrons. PreInit only.");
+        fCmdEnableImpBias->SetGuidance("Enable parallel-world slab importance biasing.");
+        fCmdEnableImpBias->SetGuidance("Biases neutrons by default, or gammas after /particle/ImpBiasMode gamma.");
         fCmdEnableImpBias->AvailableForStates(G4State_PreInit);
+
+        fCmdImpBiasMode = new G4UIcmdWithAString("/particle/ImpBiasMode", this);
+        fCmdImpBiasMode->SetGuidance("Select importance-bias particle mode: neutron or gamma. PreInit only.");
+        fCmdImpBiasMode->SetGuidance("Set this before enabling importance biasing, enabling D/T XS boost, or selecting the physics list.");
+        fCmdImpBiasMode->SetParameterName("mode", false);
+        fCmdImpBiasMode->AvailableForStates(G4State_PreInit);
 
         fCmdImpBiasNSlabs = new G4UIcmdWithAnInteger("/particle/ImpBiasNSlabs", this);
         fCmdImpBiasNSlabs->SetGuidance("Number of X slabs in importance parallel world. PreInit only.");
@@ -697,7 +833,7 @@ public:
         fCmdImpBiasWorldI->AvailableForStates(G4State_PreInit);
 
         fCmdImpBiasRatio = new G4UIcmdWithADouble("/particle/ImpBiasRatio", this);
-        fCmdImpBiasRatio->SetGuidance("Importance ratio per slab step (>1 pulls neutrons toward +X). PreInit only.");
+        fCmdImpBiasRatio->SetGuidance("Importance ratio per slab step (>1 pulls the biased particle toward +X). PreInit only.");
         fCmdImpBiasRatio->AvailableForStates(G4State_PreInit);
 
         fCmdConfigureImpBias = new G4UIcmdWithoutParameter("/particle/ConfigureImpBias", this);
@@ -722,6 +858,7 @@ public:
         delete fCmdRadialRmax;
         delete fCmdRadialZmax;
         delete fCmdConfigureImpBias;
+        delete fCmdImpBiasMode;
         delete fCmdImpBiasRatio;
         delete fCmdImpBiasWorldI;
         delete fCmdImpBiasHalfZ;
@@ -740,11 +877,26 @@ public:
     void BuildForMaster() const override {}
     void SetNewValue(G4UIcommand* cmd, G4String value) {
         if (cmd == fCmdKeepOnly) {
-            gKeepOnlyDTpnEnabled.store(fCmdKeepOnly->GetNewBoolValue(value), std::memory_order_relaxed);
+            const bool enableKeepOnly = fCmdKeepOnly->GetNewBoolValue(value);
+            if (enableKeepOnly && IsImpBiasGammaMode()) {
+                gKeepOnlyDTpnEnabled.store(false, std::memory_order_relaxed);
+                G4cout << "[ImpBias] INFO: /particle/KeepOnlyNG is disabled in gamma mode." << G4endl;
+                return;
+            }
+            gKeepOnlyDTpnEnabled.store(enableKeepOnly, std::memory_order_relaxed);
             return;
         }
         if (cmd == fCmdDTXSBoost) {
-            gEnableDTXSBoost.store(fCmdDTXSBoost->GetNewBoolValue(value), std::memory_order_relaxed);
+            const bool enableDTXSBoost = fCmdDTXSBoost->GetNewBoolValue(value);
+            if (enableDTXSBoost && IsImpBiasGammaMode()) {
+                gEnableDTXSBoost.store(false, std::memory_order_relaxed);
+                G4cout << "[ImpBias] INFO: /particle/enableDTXSBoost is disabled in gamma mode." << G4endl;
+                return;
+            }
+            gEnableDTXSBoost.store(enableDTXSBoost, std::memory_order_relaxed);
+            if (enableDTXSBoost) {
+                RegisterDTBiasingPhysics(gCurrentPhysList);
+            }
             return;
         }
         if (cmd == fCmdDTXSBoostVolume) {
@@ -782,6 +934,17 @@ public:
         if (cmd == fCmdRadialRmin) { gRadialRmin = fCmdRadialRmin->GetNewDoubleValue(value);return; }
         if (cmd == fCmdRadialRmax) { gRadialRmax = fCmdRadialRmax->GetNewDoubleValue(value);return; }
         if (cmd == fCmdRadialZmax) { gRadialZmax = fCmdRadialZmax->GetNewDoubleValue(value);return; }
+        if (cmd == fCmdImpBiasMode) {
+            if (SetImpBiasModeFromString(value) && IsImpBiasGammaMode()) {
+                if (gKeepOnlyDTpnEnabled.exchange(false, std::memory_order_relaxed)) {
+                    G4cout << "[ImpBias] INFO: disabling /particle/KeepOnlyNG for gamma mode." << G4endl;
+                }
+                if (gEnableDTXSBoost.exchange(false, std::memory_order_relaxed)) {
+                    G4cout << "[ImpBias] INFO: disabling /particle/enableDTXSBoost for gamma mode." << G4endl;
+                }
+            }
+            return;
+        }
         if (cmd == fCmdEnableImpBias) {
             const bool en = fCmdEnableImpBias->GetNewBoolValue(value);
             gEnableImpBias.store(en, std::memory_order_relaxed);

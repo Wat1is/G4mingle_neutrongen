@@ -1,0 +1,107 @@
+# print macro commands on screen
+/control/verbose 0
+
+
+# Initialize with some optimisations
+/run/useMaximumLogicalCores
+/run/initialize
+/run/setCut 100 km
+/run/setCutForAGivenParticle proton 0.7 mm
+
+
+# neutrons from a DD+DT(2peak)+TT generator / Optim: 18 deg box cone to +x; 40x40x5 scint at 45.1379*cm; f=0.03090; 32.36X reduction
+/gps/source/add 0.55
+/gps/particle neutron
+/gps/pos/type Volume
+/gps/pos/shape Cylinder
+/gps/pos/centre -20 0 0 cm
+/gps/pos/radius 10 mm
+/gps/pos/halfz 175 mm
+/gps/ang/type iso
+/gps/ene/type Gauss
+/gps/ene/mono 13.8 MeV
+/gps/ene/sigma 0.2 MeV
+/gps/ang/mintheta 72 deg
+/gps/ang/maxtheta 108 deg
+/gps/ang/minphi 162 deg
+/gps/ang/maxphi 198 deg
+
+/gps/source/add 0.45
+/gps/particle neutron
+/gps/pos/type Volume
+/gps/pos/shape Cylinder
+/gps/pos/centre -20 0 0 cm
+/gps/pos/radius 10 mm
+/gps/pos/halfz 175 mm
+/gps/ang/type iso
+/gps/ene/type Gauss
+/gps/ene/mono 14.4 MeV
+/gps/ene/sigma 0.2 MeV
+/gps/ang/mintheta 72 deg
+/gps/ang/maxtheta 108 deg
+/gps/ang/minphi 162 deg
+/gps/ang/maxphi 198 deg
+
+
+/gps/source/add 0.294
+/gps/particle neutron
+/gps/pos/type Volume
+/gps/pos/shape Cylinder
+/gps/pos/centre -20 0 0 cm
+/gps/pos/radius 10 mm
+/gps/pos/halfz 175 mm
+/gps/ang/type iso
+/gps/ene/type Gauss
+/gps/ene/mono 2.45 MeV
+/gps/ene/sigma 0.2 MeV
+/gps/ang/mintheta 72 deg
+/gps/ang/maxtheta 108 deg
+/gps/ang/minphi 162 deg
+/gps/ang/maxphi 198 deg
+
+
+/gps/source/add 0.00625
+/gps/particle neutron
+/gps/pos/type Volume
+/gps/pos/shape Cylinder
+/gps/pos/centre -20 0 0 cm
+/gps/pos/radius 10 mm
+/gps/pos/halfz 175 mm
+/gps/ang/type iso
+/gps/ene/type Gauss
+/gps/ene/mono 11.3 MeV
+/gps/ene/sigma 0.2 MeV
+/gps/ang/mintheta 72 deg
+/gps/ang/maxtheta 108 deg
+/gps/ang/minphi 162 deg
+/gps/ang/maxphi 198 deg
+
+
+
+#MESH SCORING
+/score/create/boxMesh DetectorMesh
+/score/mesh/boxSize 2.5 20. 20. cm
+/score/mesh/nBin 1 1 1
+/score/mesh/translate/xyz 45.1379 0. 0. cm
+/score/quantity/doseDeposit eDep
+/score/filter/particle penergyfilter proton
+/score/close
+/score/list
+
+
+# turn on progress report
+/run/verbose 2
+/control/verbose 0
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/process/verbose 0
+# start simulation
+/run/beamOn 10
+
+
+
+/score/dumpQuantityToFile DetectorMesh eDep energy_per_mm2_10m.txt
+
+
+
