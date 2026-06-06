@@ -1,0 +1,4 @@
+/run/numberOfThreads 16
+/control/execute neutronsim.mac
+/run/beamOn 10000
+/score/dumpQuantityToFile DetectorMesh eDep geant_benchmark_102_scores/scoredump_beamOn_10000.txt

@@ -1,18 +1,9 @@
 # print macro commands on screen
 /control/verbose 0
-/particle/ImpBiasMode gamma
 
 /physics_lists/select QGSP_BIC
 
-/particle/EnableImpBias true
-/particle/ImpBiasXMin -5 cm
-/particle/ImpBiasXMax  54 cm
-/particle/ImpBiasHalfY 25 cm
-/particle/ImpBiasHalfZ 25 cm
 
-/particle/ImpBiasNSlabs 8
-/particle/ImpBiasWorldImportance 1.0
-/particle/ImpBiasRatio 1.9
 # Initialize with some optimisations
 /run/useMaximumLogicalCores
 /run/initialize
@@ -39,7 +30,7 @@
 /gps/ang/minphi 158 deg
 /gps/ang/maxphi 202 deg
 #/gps/number 1000000
-/gps/number 100
+/gps/number 100000
 
 #MESH SCORING
 /score/create/boxMesh DetectorMesh
@@ -64,7 +55,11 @@
 #gamma real 105000000000000
 #gamma to neutron real 1050000 for 7.7
 #gamma to neutron real 131250 for 1
-/run/beamOn 10000
+/run/beamOn 1000
+#ran 10000000
+#x1,020,000
+
+#new real gammas 102,000,000,000,000
 
 
 

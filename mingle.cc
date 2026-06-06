@@ -48,8 +48,9 @@
 class MingleImpParallelWorld;
 
 namespace {
+    void EnsureSphereScoringCommands();
 
-    // ---- D/T XS boost (GB01) ----
+    // ---- DD/deuteron XS boost (GB01) ----
     std::atomic<bool> gEnableDTXSBoost{ false };
     // Empty => global
     G4String gDTXSBoostPVName = "";
@@ -143,7 +144,7 @@ namespace {
             requestedMode != gImpBiasMode)
         {
             G4cout << "[ImpBias] ERROR: mode must be set before neutron/gamma-specific biasing physics is registered. "
-                   << "Set /particle/ImpBiasMode before enabling importance biasing, enabling D/T XS boost, "
+                   << "Set /particle/ImpBiasMode before enabling importance biasing, enabling DD/deuteron XS boost, "
                    << "or before selecting a physics list."
                    << G4endl;
             return false;
@@ -417,7 +418,7 @@ class Detector : public G4VUserDetectorConstruction
         void ConstructSDandField() override
         {
             // ============================================================
-            // (A) D/T XS boost operator (GB01) - attach once per thread
+            // (A) DD/deuteron XS boost operator (GB01) - attach once per thread
             // ============================================================
             if (gEnableDTXSBoost.load(std::memory_order_relaxed))
             {
@@ -428,7 +429,6 @@ class Detector : public G4VUserDetectorConstruction
                 {
                     op = new GB01BOptrMultiParticleChangeCrossSection();
                     op->AddParticle("deuteron");
-                    op->AddParticle("triton");
 
                     if (gDTXSBoostPVName.empty())
                     {
@@ -449,7 +449,7 @@ class Detector : public G4VUserDetectorConstruction
                         }
                         if (!foundAny) {
                             G4cout << "[Biasing] WARNING: no physical volume found with name '"
-                                << gDTXSBoostPVName << "'; no targeted D/T XS boost attached." << G4endl;
+                                << gDTXSBoostPVName << "'; no targeted DD/deuteron XS boost attached." << G4endl;
                         }
                     }
 
@@ -568,7 +568,6 @@ namespace {
         // Required so GB01 operators can see wrapped biasing processes for these particles.
         auto* biasPhys = new G4GenericBiasingPhysics();
         biasPhys->Bias("deuteron");
-        biasPhys->Bias("triton");
         pl->RegisterPhysics(biasPhys);
         gDTRegisteredPhysList = pl;
     }
@@ -666,8 +665,8 @@ class Action : public G4VUserActionInitialization, public G4UImessenger
 private:
     G4UIcmdWithAString* fCmdPhys; ///< macro cmd to select a physics list
     G4UIcmdWithABool* fCmdKeepOnly; ///< enable n/p/d/t filter
-    G4UIcmdWithABool* fCmdDTXSBoost = nullptr; ///< enable dt biasing
-    G4UIcmdWithAString* fCmdDTXSBoostVolume = nullptr; //< dt biasing target volume (defaults to world if none given)
+    G4UIcmdWithABool* fCmdDTXSBoost = nullptr; ///< enable DD/deuteron biasing
+    G4UIcmdWithAString* fCmdDTXSBoostVolume = nullptr; //< DD/deuteron biasing target volume (defaults to world if none given)
     G4UIcmdWithABool* fCmdEnableEMField = nullptr; ///< enable EM field
     G4UIcmdWithAString* fCmdEMFieldTargetPV = nullptr; ///< EM field target (physical volume name,defaults to world if none given)
     G4UIcmdWithADoubleAndUnit* fCmdEMFieldMinStep = nullptr; ///<EM field min step
@@ -710,12 +709,12 @@ public:
         fCmdKeepOnly->SetGuidance("true: kill everything except neutron/proton/deuteron/triton. false: disable.");
         fCmdKeepOnly->SetGuidance("Ignored automatically in gamma importance-bias mode.");
         fCmdDTXSBoost = new G4UIcmdWithABool("/particle/enableDTXSBoost", this);
-        fCmdDTXSBoost->SetGuidance("Enable GB01 D/T cross-section boost everywhere. Must be set before /run/initialize.");
+        fCmdDTXSBoost->SetGuidance("Enable GB01 DD/deuteron cross-section boost everywhere. Must be set before /run/initialize.");
         fCmdDTXSBoost->SetGuidance("Ignored automatically in gamma importance-bias mode.");
         fCmdDTXSBoost->AvailableForStates(G4State_PreInit);
 
         fCmdDTXSBoostVolume = new G4UIcmdWithAString("/particle/DTXSBoostVolume", this);
-        fCmdDTXSBoostVolume->SetGuidance("Set physical volume name to apply D/T XS boost only there. Empty = global.");
+        fCmdDTXSBoostVolume->SetGuidance("Set physical volume name to apply DD/deuteron XS boost only there. Empty = global.");
         fCmdDTXSBoostVolume->SetParameterName("pvName", false);
         fCmdDTXSBoostVolume->AvailableForStates(G4State_PreInit);
 
@@ -796,7 +795,7 @@ public:
 
         fCmdImpBiasMode = new G4UIcmdWithAString("/particle/ImpBiasMode", this);
         fCmdImpBiasMode->SetGuidance("Select importance-bias particle mode: neutron or gamma. PreInit only.");
-        fCmdImpBiasMode->SetGuidance("Set this before enabling importance biasing, enabling D/T XS boost, or selecting the physics list.");
+        fCmdImpBiasMode->SetGuidance("Set this before enabling importance biasing, enabling DD/deuteron XS boost, or selecting the physics list.");
         fCmdImpBiasMode->SetParameterName("mode", false);
         fCmdImpBiasMode->AvailableForStates(G4State_PreInit);
 
@@ -870,6 +869,7 @@ public:
 
     }
     void Build() const override {
+        EnsureSphereScoringCommands();
         SetUserAction(new RunAction);
         SetUserAction(new Generator);
         SetUserAction(new KillboxSteppingAction);
@@ -994,12 +994,28 @@ public:
 #include <G4UIExecutive.hh>
 #include <G4VisManager.hh>
 #include <G4UImanager.hh>
+#include "SphereScoreWriter.hh"
+#include "SphereScoringMessenger.hh"
+
+namespace {
+    void EnsureSphereScoringCommands()
+    {
+        static thread_local SphereScoringMessenger* sphereScoringMessenger = nullptr;
+
+        auto* scoringManager = G4ScoringManager::GetScoringManager();
+
+        if (!sphereScoringMessenger) {
+            scoringManager->SetScoreWriter(new SphereScoreWriter);
+            sphereScoringMessenger = new SphereScoringMessenger(scoringManager);
+        }
+    }
+}
 
 int main(int argc,char** argv)
 {
 	auto *run = G4RunManagerFactory::CreateRunManager(G4RunManagerType::MT);
 
-	G4ScoringManager::GetScoringManager(); // enable macro commands in /score/
+	EnsureSphereScoringCommands(); // enable macro commands in /score/
 
     auto* detector = new Detector;
 	run->SetUserInitialization(detector);

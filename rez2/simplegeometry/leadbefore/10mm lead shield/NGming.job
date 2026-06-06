@@ -1,0 +1,38 @@
+#!/bin/bash
+# Example:
+# sbatch --export=ALL,INP='run.mac' -J ng_run -N1 -n1 -c12 ./NGming.job
+
+#SBATCH -e slurm-%j.err
+#SBATCH -o slurm-%j.out
+
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
+
+echo "PWD: $(pwd)"
+echo "HOST: $(hostname)"
+date
+
+: "${INP:?INP not set (macro filename)}"
+
+BIN="/home/geant/G4mingle_neutrongen/build/mingle"
+if [ ! -x "$BIN" ]; then
+  echo "ERROR: binary not executable: $BIN"
+  exit 2
+fi
+
+THREADS="${SLURM_CPUS_PER_TASK:-${SLURM_NTASKS:-1}}"
+
+echo "INP=$INP"
+echo "THREADS=$THREADS"
+
+TMPMAC="__slurm_${SLURM_JOB_ID}.mac"
+{
+  echo "/run/numberOfThreads ${THREADS}"
+  echo "/control/execute ${INP}"
+} > "${TMPMAC}"
+
+# No PHYSLIST export here
+"${BIN}" "${TMPMAC}"
+
+rm -f "${TMPMAC}"
+date

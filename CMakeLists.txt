@@ -26,7 +26,11 @@ set(SOURCES
   ${PROJECT_NAME}.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/GB01BOptrChangeCrossSection.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/GB01BOptrMultiParticleChangeCrossSection.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/F05Field.cc   
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/F05Field.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/SphereScoringMesh.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/PSSphereSurfaceCurrent.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/SphereScoreWriter.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/SphereScoringMessenger.cc
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

@@ -1,0 +1,45 @@
+#!/bin/bash
+# Example:
+# sbatch --export=ALL,INP='run.mac',PHYSLIST='FTFP_BERT' -J mingle_run -N1 -n1 -c16 ./mingle.job
+
+#SBATCH -e slurm-%j.err
+#SBATCH -o slurm-%j.out
+
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
+
+echo "PWD: $(pwd)"
+echo "HOST: $(hostname)"
+date
+
+: "${INP:?INP not set (macro filename)}"
+: "${PHYSLIST:?PHYSLIST not set (string)}"
+
+BIN="/home/geant/mingle/build/mingle"
+if [ ! -x "$BIN" ]; then
+  echo "ERROR: binary not executable: $BIN"
+  exit 2
+fi
+
+# Threads requested: prefer -c (cpus-per-task), else fallback to -n (ntasks)
+THREADS="${SLURM_CPUS_PER_TASK:-${SLURM_NTASKS:-1}}"
+
+echo "INP=$INP"
+echo "THREADS=$THREADS"
+echo "PHYSLIST=$PHYSLIST"
+
+# Build a wrapper macro to force thread count, then execute your macro.
+# This assumes your app supports Geant4 macro commands.
+TMPMAC="__slurm_${SLURM_JOB_ID}.mac"
+{
+  echo "/run/numberOfThreads ${THREADS}"
+  echo "/control/execute ${INP}"
+} > "${TMPMAC}"
+
+export PHYSLIST
+
+# If your app needs different CLI args, adjust this line.
+"${BIN}" "${TMPMAC}"
+
+rm -f "${TMPMAC}"
+date
